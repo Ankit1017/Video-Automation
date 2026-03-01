@@ -4,6 +4,7 @@ from dataclasses import asdict
 from hashlib import sha256
 import json
 from typing import Any
+from uuid import uuid4
 
 from main_app.models import WebSourcingSettings
 from main_app.platform.web_sourcing.cache_store import WebSourceCacheStore
@@ -36,6 +37,8 @@ from main_app.platform.web_sourcing.reliability import (
     ProviderCircuitBreakerRegistry,
     RetryPolicy,
 )
+from main_app.services.observability_service import ensure_request_id
+from main_app.services.telemetry_service import ObservabilityEvent, TelemetryService
 
 
 class WebSourcingOrchestrator:
@@ -47,12 +50,14 @@ class WebSourcingOrchestrator:
         providers: dict[str, WebSearchProvider] | None = None,
         domain_rate_limiter: DomainRateLimiter | None = None,
         circuit_breakers: ProviderCircuitBreakerRegistry | None = None,
+        telemetry_service: TelemetryService | None = None,
     ) -> None:
         self._cache_store = cache_store or WebSourceCacheStore()
         self._crawler = crawler or FocusedCrawler()
         self._providers = providers or self._build_default_providers()
         self._domain_rate_limiter = domain_rate_limiter or DomainRateLimiter()
         self._circuit_breakers = circuit_breakers or ProviderCircuitBreakerRegistry()
+        self._telemetry_service = telemetry_service
 
     def run(
         self,
@@ -61,27 +66,93 @@ class WebSourcingOrchestrator:
         constraints: str,
         settings: WebSourcingSettings,
     ) -> WebSourcingRunResult:
+        request_id = ensure_request_id()
+        run_id = f"ws_{uuid4().hex[:12]}"
         normalized_settings = self._normalize_settings(settings)
+        if self._telemetry_service is not None:
+            with self._telemetry_service.context_scope(request_id=request_id, run_id=run_id):
+                self._telemetry_service.record_event(
+                    ObservabilityEvent(
+                        event_name="web_sourcing.run.start",
+                        component="web_sourcing.orchestrator",
+                        status="started",
+                        timestamp=_utc_now_iso(),
+                        attributes={
+                            "provider_requested": normalized_settings.provider_key,
+                            "enabled": bool(normalized_settings.enabled),
+                            "force_refresh": bool(normalized_settings.force_refresh),
+                        },
+                    )
+                )
+
+        def _finalize(result: WebSourcingRunResult) -> WebSourcingRunResult:
+            result.diagnostics["request_id"] = request_id
+            result.diagnostics["run_id"] = run_id
+            if self._telemetry_service is not None:
+                with self._telemetry_service.context_scope(request_id=request_id, run_id=run_id):
+                    payload_ref = self._telemetry_service.attach_payload(
+                        payload={
+                            "query": result.query,
+                            "provider": result.provider,
+                            "warnings": result.warnings,
+                            "diagnostics": result.diagnostics,
+                            "search_results": [asdict(item) for item in result.search_results],
+                            "fetched_pages": [asdict(item) for item in result.fetched_pages],
+                        },
+                        kind="web_sourcing_run",
+                    )
+                    self._telemetry_service.record_metric(
+                        name="web_sourcing_runs_total",
+                        value=1.0,
+                        attrs={
+                            "provider": result.provider,
+                            "cache_hit": bool(result.cache_hit),
+                        },
+                    )
+                    self._telemetry_service.record_metric(
+                        name="web_sourcing_accepted_pages_total",
+                        value=float(len(result.fetched_pages)),
+                        attrs={"provider": result.provider},
+                    )
+                    self._telemetry_service.record_event(
+                        ObservabilityEvent(
+                            event_name="web_sourcing.run.end",
+                            component="web_sourcing.orchestrator",
+                            status="ok" if not result.warnings else "warning",
+                            timestamp=_utc_now_iso(),
+                            attributes={
+                                "provider": result.provider,
+                                "cache_hit": bool(result.cache_hit),
+                                "warning_count": len(result.warnings),
+                                "search_count": int(result.diagnostics.get("search_count", 0) or 0),
+                                "fetched_count": int(result.diagnostics.get("fetched_count", 0) or 0),
+                                "accepted_count": int(result.diagnostics.get("accepted_count", 0) or 0),
+                            },
+                            payload_ref=payload_ref,
+                        )
+                    )
+            return result
+
         if not normalized_settings.enabled:
-            return WebSourcingRunResult(
+            return _finalize(WebSourcingRunResult(
                 query="",
                 provider=normalized_settings.provider_key,
                 search_results=[],
                 fetched_pages=[],
                 warnings=[],
                 diagnostics={"enabled": False},
-            )
+            ))
 
         query = normalize_query(topic, constraints)
         if not query:
-            return WebSourcingRunResult(
+            return _finalize(WebSourcingRunResult(
                 query="",
                 provider=normalized_settings.provider_key,
                 search_results=[],
                 fetched_pages=[],
                 warnings=["Web sourcing skipped: query is empty after normalization."],
                 diagnostics={"enabled": True, "query_empty": True},
-            )
+            ))
 
         provider_candidates = self._provider_candidates(normalized_settings)
         requested_provider = provider_candidates[0]
@@ -92,7 +163,7 @@ class WebSourcingOrchestrator:
                 cached_result = self._deserialize_run_result(cached)
                 cached_result.cache_hit = True
                 cached_result.diagnostics["cache_hit"] = True
-                return cached_result
+                return _finalize(cached_result)
 
         query_variants = build_query_variants(
             query,
@@ -258,7 +329,7 @@ class WebSourcingOrchestrator:
             diagnostics=diagnostics,
         )
         self._cache_store.set(cache_key, self._serialize_run_result(result))
-        return result
+        return _finalize(result)
 
     def _run_provider_pipeline(
         self,
@@ -842,3 +913,9 @@ class WebSourcingOrchestrator:
             "hard_error": False,
             "error": "",
         }
+
+
+def _utc_now_iso() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()

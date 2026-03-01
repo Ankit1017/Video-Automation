@@ -83,6 +83,7 @@ SESSION_DEFAULTS = {
     "audio_overview_audio_error": "",
     "audio_overview_last_constraints": "",
     "audio_overview_use_youtube_prompt": False,
+    "audio_overview_use_hinglish_script": False,
     "audio_overview_background_job_id": "",
     "audio_overview_background_job_applied_id": "",
     "intent_chat_history": [],
@@ -139,6 +140,14 @@ SESSION_DEFAULTS = {
     "observability_show_charts": True,
     "observability_show_table": True,
     "observability_enable_download": True,
+    "documentation_mode": "UI Documentation",
+    "documentation_search_query": "",
+    "documentation_selected_debug_doc": "UI Documentation Reference",
+    "documentation_ui_section": "Overview",
+    "documentation_debug_section": "Overview",
+    "documentation_ui_feature_focus": "",
+    "documentation_expand_all_ui_sections": False,
+    "documentation_show_full_backend_matrix": False,
 }
 
 

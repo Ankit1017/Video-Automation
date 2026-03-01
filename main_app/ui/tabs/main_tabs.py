@@ -33,6 +33,7 @@ from main_app.ui.tabs.additional_settings_tab import render_additional_settings_
 from main_app.ui.tabs.asset_history_tab import render_asset_history_tab
 from main_app.ui.tabs.audio_overview_tab import render_audio_overview_tab
 from main_app.ui.tabs.data_table_tab import render_data_table_tab
+from main_app.ui.tabs.documentation_tab import render_documentation_tab
 from main_app.ui.tabs.explainer_tab import render_explainer_tab
 from main_app.ui.tabs.flashcards_tab import render_flashcards_tab
 from main_app.ui.tabs.intent_chat_tab import render_intent_chat_tab
@@ -195,6 +196,13 @@ def build_main_tab_registrations(
             render=lambda: render_cache_center_tab(
                 llm_service=llm_service,
                 cache_location=cache_location,
+            ),
+        ),
+        TabRegistration(
+            title="Documentation Center",
+            render=lambda: render_documentation_tab(
+                agent_dashboard_service=agent_dashboard_service,
+                observability_service=observability_service,
             ),
         ),
         TabRegistration(

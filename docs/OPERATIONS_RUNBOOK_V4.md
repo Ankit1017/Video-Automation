@@ -24,6 +24,8 @@ Track these first:
    - schema/verification/policy summaries
 5. **Provider diagnostics**
    - web provider attempts, circuit state, retries
+6. **Correlated telemetry context**
+   - request_id, run_id, job_id, trace_id, span_id
 
 ## Recommended Runtime Flags (Stable Defaults)
 
@@ -35,6 +37,9 @@ Track these first:
 - `ENABLE_PARALLEL_DAG=true`
 - `MAX_PARALLEL_TOOLS=2`
 - `WORKFLOW_FAIL_POLICY=continue`
+- `OBSERVABILITY_OTEL_ENABLED=true`
+- `OBSERVABILITY_PAYLOAD_CAPTURE_ENABLED=true`
+- `OBSERVABILITY_PAYLOAD_RETENTION_DAYS=14`
 
 ## Common Error Code Buckets
 

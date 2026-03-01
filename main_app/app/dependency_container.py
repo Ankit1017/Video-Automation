@@ -11,6 +11,10 @@ from main_app.parsers.mind_map_parser import MindMapParser
 from main_app.parsers.quiz_parser import QuizParser
 from main_app.parsers.slideshow_parser import SlideShowParser
 from main_app.services.agent_dashboard import AgentDashboardService
+from main_app.services.agent_dashboard.asset_executor_registry import build_default_asset_executor_registry
+from main_app.services.agent_dashboard.asset_service import AgentDashboardAssetService
+from main_app.services.agent_dashboard.run_ledger_service import RunLedgerService
+from main_app.services.agent_dashboard.stage_ledger_service import StageLedgerService
 from main_app.services.asset_history_service import AssetHistoryService
 from main_app.services.audio_overview_service import AudioOverviewService
 from main_app.services.cached_llm_service import CachedLLMService
@@ -28,6 +32,7 @@ from main_app.services.source_grounding_service import SourceGroundingService
 from main_app.domains.topic.services.topic_explainer_service import TopicExplainerService
 from main_app.services.video_asset_service import VideoAssetService
 from main_app.services.video_export_service import VideoExportService
+from main_app.services.telemetry_service import TelemetryService
 
 
 @dataclass(frozen=True)
@@ -56,6 +61,7 @@ def build_app_container(
     *,
     llm_service: CachedLLMService,
     storage_bundle: Any,
+    telemetry_service: TelemetryService | None = None,
 ) -> AppContainer:
     asset_history_service = AssetHistoryService(storage_bundle.asset_history_store)
     explainer_service = TopicExplainerService(llm_service, history_service=asset_history_service)
@@ -98,8 +104,32 @@ def build_app_container(
     source_grounding_service = SourceGroundingService()
     global_grounding_service = GlobalGroundingService(
         source_grounding_service=source_grounding_service,
+        telemetry_service=telemetry_service,
     )
     intent_router_service = IntentRouterService(llm_service, IntentParser())
+    run_ledger_service = RunLedgerService(store=storage_bundle.run_ledger_store)
+    stage_ledger_service = StageLedgerService(store=storage_bundle.stage_ledger_store)
+    asset_executor_registry = build_default_asset_executor_registry(
+        explainer_service=explainer_service,
+        mind_map_service=mind_map_service,
+        flashcards_service=flashcards_service,
+        data_table_service=data_table_service,
+        quiz_service=quiz_service,
+        slideshow_service=slideshow_service,
+        video_service=video_service,
+        audio_overview_service=audio_overview_service,
+        report_service=report_service,
+    )
+    agent_asset_service = AgentDashboardAssetService(
+        intent_router=intent_router_service,
+        asset_executor_registry=asset_executor_registry,
+        mind_map_service=mind_map_service,
+        flashcards_service=flashcards_service,
+        quiz_service=quiz_service,
+        run_ledger_service=run_ledger_service,
+        stage_ledger_service=stage_ledger_service,
+        telemetry_service=telemetry_service,
+    )
     agent_dashboard_service = AgentDashboardService(
         intent_router=intent_router_service,
         explainer_service=explainer_service,
@@ -111,6 +141,7 @@ def build_app_container(
         video_service=video_service,
         audio_overview_service=audio_overview_service,
         report_service=report_service,
+        asset_service=agent_asset_service,
     )
     return AppContainer(
         explainer_service=explainer_service,
@@ -124,9 +155,9 @@ def build_app_container(
         video_service=video_service,
         intent_router_service=intent_router_service,
         agent_dashboard_service=agent_dashboard_service,
-        quiz_export_service=QuizExportService(),
-        report_export_service=ReportExportService(),
-        video_export_service=VideoExportService(),
+        quiz_export_service=QuizExportService(telemetry_service=telemetry_service),
+        report_export_service=ReportExportService(telemetry_service=telemetry_service),
+        video_export_service=VideoExportService(telemetry_service=telemetry_service),
         source_grounding_service=source_grounding_service,
         global_grounding_service=global_grounding_service,
         asset_history_service=asset_history_service,

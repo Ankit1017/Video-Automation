@@ -1,0 +1,74 @@
+{
+  "id": null,
+  "uid": "video-automation-overview",
+  "title": "Video Automation Observability",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "tags": ["video-automation", "observability"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "LLM Calls / sec",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "rate(llm_calls_total[1m])",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Web Sourcing Runs / sec",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "rate(web_sourcing_runs_total[1m])",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Agent Stage Duration (ms)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(agent_stage_duration_ms_bucket[5m])) by (le))",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Export Duration (ms)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "rate(export_video_duration_ms_sum[5m])",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(export_report_duration_ms_sum[5m])",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(export_quiz_duration_ms_sum[5m])",
+          "refId": "C"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+    }
+  ],
+  "templating": {"list": []},
+  "annotations": {"list": []}
+}

@@ -23,6 +23,7 @@ def _build_executor(context: AssetExecutorPluginContext) -> AssetExecutor:
             conversation_style=str(payload.get("conversation_style", "Educational Discussion")),
             constraints=str(payload.get("constraints", "")),
             use_youtube_prompt=bool(payload.get("youtube_prompt", False)),
+            use_hinglish_script=bool(payload.get("hinglish_script", False)),
             settings=settings,
         )
         if result.parse_error or not result.parsed_overview:

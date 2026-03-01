@@ -3,11 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from main_app.models import AgentPlan, GroqSettings, WebSourcingSettings
+from main_app.services.observability_service import ensure_request_id
 from main_app.services.agent_dashboard import AgentDashboardService
 from main_app.services.agent_dashboard.executor_types import AssetExecutionRuntimeContext
 from main_app.services.cached_llm_service import CachedLLMService
 from main_app.services.global_grounding_service import GlobalGroundingService
 from main_app.services.source_grounding_service import SourceGroundingService
+from main_app.services.telemetry_service import ObservabilityEvent
 from main_app.ui.agent_dashboard.session_manager import AgentDashboardSessionManager
 from main_app.ui.agent_dashboard.state_gateway import SessionStateGateway
 
@@ -43,6 +45,20 @@ class AgentDashboardChatFlowController:
         planner_mode: str,
         pending_plan: dict[str, Any] | None,
     ) -> None:
+        request_id = ensure_request_id()
+        telemetry = self._llm_service.observability.telemetry_service if self._llm_service.observability else None
+        context_scope = telemetry.context_scope(request_id=request_id) if telemetry is not None else _null_context()
+        with context_scope:
+            if telemetry is not None:
+                telemetry.record_event(
+                    ObservabilityEvent(
+                        event_name="agent.chat.process_prompt.start",
+                        component="agent_dashboard.chat_flow",
+                        status="started",
+                        timestamp=_now_iso(),
+                        attributes={"planner_mode": planner_mode, "has_pending_plan": bool(pending_plan)},
+                    )
+                )
         history_raw = self._state.get("agent_dashboard_history", [])
         history: list[dict[str, Any]] = history_raw if isinstance(history_raw, list) else []
         history.append({"role": "user", "text": prompt.strip()})
@@ -56,6 +72,16 @@ class AgentDashboardChatFlowController:
                 planner_mode=planner_mode,
             )
             self._session_manager.persist_current_session()
+            if telemetry is not None:
+                telemetry.record_event(
+                    ObservabilityEvent(
+                        event_name="agent.chat.process_prompt.end",
+                        component="agent_dashboard.chat_flow",
+                        status="ok",
+                        timestamp=_now_iso(),
+                        attributes={"path": "pending_mandatory"},
+                    )
+                )
             return
 
         self._handle_new_message_flow(
@@ -65,6 +91,16 @@ class AgentDashboardChatFlowController:
             planner_mode=planner_mode,
         )
         self._session_manager.persist_current_session()
+        if telemetry is not None:
+            telemetry.record_event(
+                ObservabilityEvent(
+                    event_name="agent.chat.process_prompt.end",
+                    component="agent_dashboard.chat_flow",
+                    status="ok",
+                    timestamp=_now_iso(),
+                    attributes={"path": "new_message"},
+                )
+            )
 
     def _handle_new_message_flow(
         self,
@@ -349,3 +385,18 @@ class AgentDashboardChatFlowController:
             if fields:
                 return True
         return False
+
+
+from contextlib import contextmanager
+from typing import Iterator
+
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+@contextmanager
+def _null_context() -> Iterator[None]:
+    yield

@@ -6,12 +6,15 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
+from time import perf_counter
 
 from main_app.shared.slideshow.representation_normalizer import (
     is_progressive_representation,
     normalize_slide_representation,
 )
 from main_app.contracts import SlideContent, VideoPayload
+from main_app.services.observability_service import ensure_request_id
+from main_app.services.telemetry_service import ObservabilityEvent, TelemetryService
 from main_app.services.text_sanitizer import sanitize_text
 
 
@@ -79,6 +82,9 @@ class VideoExportService:
         ),
     }
 
+    def __init__(self, *, telemetry_service: TelemetryService | None = None) -> None:
+        self._telemetry_service = telemetry_service
+
     def build_video_mp4(
         self,
         *,
@@ -88,6 +94,23 @@ class VideoExportService:
         template_key: str | None = None,
         animation_style: str | None = None,
     ) -> tuple[bytes | None, str | None]:
+        request_id = ensure_request_id()
+        started_at = perf_counter()
+        if self._telemetry_service is not None:
+            with self._telemetry_service.context_scope(request_id=request_id):
+                self._telemetry_service.record_event(
+                    ObservabilityEvent(
+                        event_name="export.video.start",
+                        component="export.video_mp4",
+                        status="started",
+                        timestamp=_now_iso(),
+                        attributes={
+                            "topic": topic,
+                            "template_key": template_key or "",
+                            "animation_style": animation_style or "",
+                        },
+                    )
+                )
         if not audio_bytes:
             return None, "Audio is required before building full video."
 
@@ -169,8 +192,75 @@ class VideoExportService:
 
             if not output_path.exists():
                 return None, "Video rendering failed: output file was not produced."
-            return output_path.read_bytes(), None
+            video_bytes = output_path.read_bytes()
+            if self._telemetry_service is not None:
+                with self._telemetry_service.context_scope(request_id=request_id):
+                    duration_ms = max((perf_counter() - started_at) * 1000.0, 0.0)
+                    payload_ref = self._telemetry_service.attach_payload(
+                        payload={
+                            "topic": topic,
+                            "template_key": selected_template_key,
+                            "animation_style": selected_animation_style,
+                            "slide_count": len(slides),
+                        },
+                        kind="video_export",
+                    )
+                    self._telemetry_service.record_metric(
+                        name="export_video_duration_ms",
+                        value=duration_ms,
+                        attrs={
+                            "status": "ok",
+                            "template_key": selected_template_key,
+                            "animation_style": selected_animation_style,
+                        },
+                    )
+                    self._telemetry_service.record_metric(
+                        name="export_video_bytes_total",
+                        value=float(len(video_bytes)),
+                        attrs={
+                            "status": "ok",
+                            "template_key": selected_template_key,
+                            "animation_style": selected_animation_style,
+                        },
+                    )
+                    self._telemetry_service.record_event(
+                        ObservabilityEvent(
+                            event_name="export.video.end",
+                            component="export.video_mp4",
+                            status="ok",
+                            timestamp=_now_iso(),
+                            attributes={
+                                "duration_ms": round(duration_ms, 3),
+                                "bytes": len(video_bytes),
+                                "slide_count": len(slides),
+                                "template_key": selected_template_key,
+                                "animation_style": selected_animation_style,
+                            },
+                            payload_ref=payload_ref,
+                        )
+                    )
+            return video_bytes, None
         except (OSError, ValueError, RuntimeError, TypeError) as exc:
+            if self._telemetry_service is not None:
+                with self._telemetry_service.context_scope(request_id=request_id):
+                    duration_ms = max((perf_counter() - started_at) * 1000.0, 0.0)
+                    self._telemetry_service.record_metric(
+                        name="export_video_duration_ms",
+                        value=duration_ms,
+                        attrs={"status": "error"},
+                    )
+                    self._telemetry_service.record_event(
+                        ObservabilityEvent(
+                            event_name="export.video.end",
+                            component="export.video_mp4",
+                            status="error",
+                            timestamp=_now_iso(),
+                            attributes={
+                                "duration_ms": round(duration_ms, 3),
+                                "error": str(exc),
+                            },
+                        )
+                    )
             return None, f"Failed to render video: {exc}"
         finally:
             for clip in all_visual_clips:
@@ -991,3 +1081,9 @@ class VideoExportService:
         if not wrapped:
             return [text], final_font
         return wrapped[:max_lines], final_font
+
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()

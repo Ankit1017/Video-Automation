@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import hashlib
@@ -57,6 +58,8 @@ from main_app.services.agent_dashboard.workflow_registry import (
     AgentWorkflowRegistry,
     build_default_agent_workflow_registry,
 )
+from main_app.services.observability_service import ensure_request_id
+from main_app.services.telemetry_service import ObservabilityEvent, TelemetryService
 from main_app.services.flashcards_service import FlashcardsService
 from main_app.services.intent import IntentRouterService
 from main_app.services.mind_map_service import MindMapService
@@ -81,6 +84,7 @@ class AgentDashboardAssetService:
         orchestration_state_service: OrchestrationStateService | None = None,
         on_stage_event: Callable[[StageDiagnostic], None] | None = None,
         on_run_event: Callable[[RunLedgerRecord], None] | None = None,
+        telemetry_service: TelemetryService | None = None,
     ) -> None:
         self._intent_router = intent_router
         self._asset_executor_registry = asset_executor_registry
@@ -98,6 +102,7 @@ class AgentDashboardAssetService:
         self._orchestration_state_service = orchestration_state_service or OrchestrationStateService()
         self._on_stage_event = on_stage_event
         self._on_run_event = on_run_event
+        self._telemetry_service = telemetry_service
 
     def generate_assets_from_plan(
         self,
@@ -222,9 +227,21 @@ class AgentDashboardAssetService:
         started_at = _now_iso()
         resume_run_id = " ".join(str(resume_from_run_id or "").split()).strip()
         run_id_value = " ".join(str(run_id or "").split()).strip() or resume_run_id or uuid4().hex[:16]
+        request_id = ensure_request_id()
         notes: list[str] = [f"run_id={run_id_value}"]
         assets: list[AgentAssetResult] = []
         run_summaries: list[AssetRunSummary] = []
+
+        if self._telemetry_service is not None:
+            self._telemetry_service.record_event(
+                ObservabilityEvent(
+                    event_name="agent.run.start",
+                    component="agent_dashboard.asset_service",
+                    status="started",
+                    timestamp=_now_iso(),
+                    attributes={"run_id": run_id_value, "request_id": request_id},
+                )
+            )
 
         intents = list(plan.intents)
         payloads = dict(plan.payloads)
@@ -286,114 +303,122 @@ class AgentDashboardAssetService:
         parallel_enabled = enable_parallel_dag() and max_parallel_tools() > 1
         parallel_limit = max_parallel_tools()
 
-        while pending:
-            ready = [
-                key
-                for key in pending
-                if all(parent in completed for parent in dependencies.get(key, []))
-            ]
-            for key in ready:
-                transition = self._orchestration_state_service.transition(
-                    from_state=tool_states.get(key, "pending"),
-                    to_state="ready",
-                )
-                if transition.valid:
-                    tool_states[key] = "ready"
-            ready.sort(key=lambda key: (order_index.get(key, 9999), key))
-            if not ready:
-                notes.append(f"[{E_PARALLEL_SCHEDULER_FAILURE}] No schedulable tools remain.")
-                break
+        context_scope = (
+            self._telemetry_service.context_scope(request_id=request_id, run_id=run_id_value)
+            if self._telemetry_service is not None
+            else None
+        )
+        if context_scope is None:
+            context_scope = _null_context()
+        with context_scope:
+            while pending:
+                ready = [
+                    key
+                    for key in pending
+                    if all(parent in completed for parent in dependencies.get(key, []))
+                ]
+                for key in ready:
+                    transition = self._orchestration_state_service.transition(
+                        from_state=tool_states.get(key, "pending"),
+                        to_state="ready",
+                    )
+                    if transition.valid:
+                        tool_states[key] = "ready"
+                ready.sort(key=lambda key: (order_index.get(key, 9999), key))
+                if not ready:
+                    notes.append(f"[{E_PARALLEL_SCHEDULER_FAILURE}] No schedulable tools remain.")
+                    break
 
-            if not parallel_enabled:
-                selected = ready[:1]
-            else:
-                selected = ready[:parallel_limit]
-
-            for key in selected:
-                run_transition = self._orchestration_state_service.transition(
-                    from_state=tool_states.get(key, "ready"),
-                    to_state="running",
-                )
-                if run_transition.valid:
-                    tool_states[key] = "running"
+                if not parallel_enabled:
+                    selected = ready[:1]
                 else:
-                    notes.append(f"[{E_STATE_TRANSITION_INVALID}] {run_transition.message}")
+                    selected = ready[:parallel_limit]
 
-            batch_results: dict[str, tuple[AgentAssetResult, list[ToolStageResult]]] = {}
-            if len(selected) == 1:
-                tool = key_to_tool[selected[0]]
-                queue_wait_ms = int((perf_counter() - queue_started_at) * 1000)
-                batch_results[tool.key] = self._run_tool(
-                    tool=tool,
-                    payload=payloads.get(tool.intent, {}),
-                    settings=settings,
-                    runtime_context=runtime_context,
-                    available_artifacts=available_artifacts,
-                    run_id=run_id_value,
-                    queue_wait_ms=queue_wait_ms,
-                    on_stage_event=stage_event_sink,
-                    executed_signatures=executed_signatures,
-                )
-            else:
-                with ThreadPoolExecutor(max_workers=len(selected)) as executor:
-                    futures = {}
-                    for key in selected:
-                        tool = key_to_tool[key]
-                        queue_wait_ms = int((perf_counter() - queue_started_at) * 1000)
-                        futures[key] = executor.submit(
-                            self._run_tool,
-                            tool=tool,
-                            payload=payloads.get(tool.intent, {}),
-                            settings=settings,
-                            runtime_context=runtime_context,
-                            available_artifacts=dict(available_artifacts),
-                            run_id=run_id_value,
-                            queue_wait_ms=queue_wait_ms,
-                            on_stage_event=stage_event_sink,
-                            executed_signatures=executed_signatures,
-                        )
-                    for key, future in futures.items():
-                        batch_results[key] = future.result()
+                for key in selected:
+                    run_transition = self._orchestration_state_service.transition(
+                        from_state=tool_states.get(key, "ready"),
+                        to_state="running",
+                    )
+                    if run_transition.valid:
+                        tool_states[key] = "running"
+                    else:
+                        notes.append(f"[{E_STATE_TRANSITION_INVALID}] {run_transition.message}")
 
-            for key in selected:
-                pending.discard(key)
-                completed.add(key)
-                tool = key_to_tool[key]
-                asset, stage_results = batch_results[key]
-                finish_transition = self._orchestration_state_service.transition(
-                    from_state=tool_states.get(key, "running"),
-                    to_state="completed" if asset.status == "success" else "failed",
-                )
-                if finish_transition.valid:
-                    tool_states[key] = "completed" if asset.status == "success" else "failed"
+                batch_results: dict[str, tuple[AgentAssetResult, list[ToolStageResult]]] = {}
+                if len(selected) == 1:
+                    tool = key_to_tool[selected[0]]
+                    queue_wait_ms = int((perf_counter() - queue_started_at) * 1000)
+                    batch_results[tool.key] = self._run_tool(
+                        tool=tool,
+                        payload=payloads.get(tool.intent, {}),
+                        settings=settings,
+                        runtime_context=runtime_context,
+                        available_artifacts=available_artifacts,
+                        run_id=run_id_value,
+                        queue_wait_ms=queue_wait_ms,
+                        on_stage_event=stage_event_sink,
+                        executed_signatures=executed_signatures,
+                    )
                 else:
-                    notes.append(f"[{E_STATE_TRANSITION_INVALID}] {finish_transition.message}")
-                results_by_key[key] = (asset, stage_results)
-                assets.append(asset)
-                self._append_stage_notes(notes=notes, intent=tool.intent, stage_results=stage_results)
+                    with ThreadPoolExecutor(max_workers=len(selected)) as executor:
+                        futures = {}
+                        for key in selected:
+                            tool = key_to_tool[key]
+                            queue_wait_ms = int((perf_counter() - queue_started_at) * 1000)
+                            futures[key] = executor.submit(
+                                self._run_tool,
+                                tool=tool,
+                                payload=payloads.get(tool.intent, {}),
+                                settings=settings,
+                                runtime_context=runtime_context,
+                                available_artifacts=dict(available_artifacts),
+                                run_id=run_id_value,
+                                queue_wait_ms=queue_wait_ms,
+                                on_stage_event=stage_event_sink,
+                                executed_signatures=executed_signatures,
+                            )
+                        for key, future in futures.items():
+                            batch_results[key] = future.result()
 
-                if asset.status == "success" and self._publishable(asset):
-                    produced = collect_produced_artifacts(result=asset, execution_spec=tool.execution_spec)
-                    for artifact_key, artifact_value in produced.items():
-                        available_artifacts[artifact_key] = artifact_value
-                elif asset.status == "success":
-                    notes.append(f"{tool.intent}: dependency artifacts suppressed due to verify/policy failure.")
+                for key in selected:
+                    pending.discard(key)
+                    completed.add(key)
+                    tool = key_to_tool[key]
+                    asset, stage_results = batch_results[key]
+                    finish_transition = self._orchestration_state_service.transition(
+                        from_state=tool_states.get(key, "running"),
+                        to_state="completed" if asset.status == "success" else "failed",
+                    )
+                    if finish_transition.valid:
+                        tool_states[key] = "completed" if asset.status == "success" else "failed"
+                    else:
+                        notes.append(f"[{E_STATE_TRANSITION_INVALID}] {finish_transition.message}")
+                    results_by_key[key] = (asset, stage_results)
+                    assets.append(asset)
+                    self._append_stage_notes(notes=notes, intent=tool.intent, stage_results=stage_results)
 
-                summary: AssetRunSummary = {
-                    "run_id": run_id_value,
-                    "workflow_key": plan_workflow.key,
-                    "tool_key": tool.key,
-                    "intent": tool.intent,
-                    "status": asset.status,
-                    "verification_status": self._verification_status(asset),
-                    "retry_count": self._retry_count(asset),
-                }
-                run_summaries.append(summary)
-                if self._workflow_fail_fast() and asset.status == "error":
-                    stop_due_to_fail_fast = True
-                    notes.append(f"Workflow fail-fast triggered at tool `{tool.key}`.")
-            if stop_due_to_fail_fast:
-                break
+                    if asset.status == "success" and self._publishable(asset):
+                        produced = collect_produced_artifacts(result=asset, execution_spec=tool.execution_spec)
+                        for artifact_key, artifact_value in produced.items():
+                            available_artifacts[artifact_key] = artifact_value
+                    elif asset.status == "success":
+                        notes.append(f"{tool.intent}: dependency artifacts suppressed due to verify/policy failure.")
+
+                    summary: AssetRunSummary = {
+                        "run_id": run_id_value,
+                        "workflow_key": plan_workflow.key,
+                        "tool_key": tool.key,
+                        "intent": tool.intent,
+                        "status": asset.status,
+                        "verification_status": self._verification_status(asset),
+                        "retry_count": self._retry_count(asset),
+                    }
+                    run_summaries.append(summary)
+                    if self._workflow_fail_fast() and asset.status == "error":
+                        stop_due_to_fail_fast = True
+                        notes.append(f"Workflow fail-fast triggered at tool `{tool.key}`.")
+                if stop_due_to_fail_fast:
+                    break
 
         success_count = sum(1 for asset in assets if asset.status == "success")
         if assets:
@@ -410,6 +435,31 @@ class AgentDashboardAssetService:
         )
         self._record_run(run_record=run_record, notes=notes, on_run_event=on_run_event)
         notes.append(f"run_summary_count={len(run_summaries)}")
+        if self._telemetry_service is not None:
+            payload_ref = self._telemetry_service.attach_payload(payload=run_record, kind="agent_run_record")
+            self._telemetry_service.record_metric(
+                name="agent_runs_total",
+                value=1.0,
+                attrs={
+                    "workflow_key": plan_workflow.key,
+                    "status": run_record.get("status", "unknown"),
+                },
+            )
+            self._telemetry_service.record_event(
+                ObservabilityEvent(
+                    event_name="agent.run.end",
+                    component="agent_dashboard.asset_service",
+                    status=str(run_record.get("status", "unknown")),
+                    timestamp=_now_iso(),
+                    attributes={
+                        "run_id": run_id_value,
+                        "workflow_key": plan_workflow.key,
+                        "request_id": request_id,
+                        "summary_count": len(run_summaries),
+                    },
+                    payload_ref=payload_ref,
+                )
+            )
         return assets, notes
 
     def _generate_assets_from_plan_linear(
@@ -583,6 +633,36 @@ class AgentDashboardAssetService:
                 "transition_valid": True,
             }
             self._stage_ledger_service.record_stage(diagnostic)
+            if self._telemetry_service is not None:
+                payload_ref = self._telemetry_service.attach_payload(payload=diagnostic, kind="agent_stage_diagnostic")
+                self._telemetry_service.record_metric(
+                    name="agent_stage_duration_ms",
+                    value=float(diagnostic.get("duration_ms", 0) or 0.0),
+                    attrs={
+                        "workflow_key": workflow_key,
+                        "tool_key": tool_key,
+                        "stage_key": str(record.get("stage_key", "")),
+                        "status": str(record.get("status", "")),
+                    },
+                )
+                self._telemetry_service.record_event(
+                    ObservabilityEvent(
+                        event_name="agent.stage",
+                        component="agent_dashboard.stage",
+                        status=str(record.get("status", "")) or "unknown",
+                        timestamp=str(record.get("ended_at", "")) or _now_iso(),
+                        attributes={
+                            "run_id": run_id,
+                            "workflow_key": workflow_key,
+                            "tool_key": tool_key,
+                            "stage_key": str(record.get("stage_key", "")),
+                            "attempt": int(record.get("attempt", 1) or 1),
+                            "duration_ms": int(record.get("duration_ms", 0) or 0),
+                            "error_code": str(record.get("error_code", "")),
+                        },
+                        payload_ref=payload_ref,
+                    )
+                )
             if sink is not None:
                 sink(diagnostic)
 
@@ -891,3 +971,8 @@ def _json_safe(value: object) -> object:
 def _checksum(value: object) -> str:
     blob = json.dumps(_json_safe(value), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+@contextmanager
+def _null_context() -> Iterator[None]:
+    yield

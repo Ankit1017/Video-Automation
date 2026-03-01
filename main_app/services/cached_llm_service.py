@@ -14,6 +14,7 @@ from main_app.infrastructure.groq_client import (
 )
 from main_app.models import GroqSettings
 from main_app.services.observability_service import ObservabilityService, ensure_request_id
+from main_app.services.telemetry_service import ObservabilityEvent
 
 
 class CachedLLMService:
@@ -126,6 +127,7 @@ class CachedLLMService:
         temperature = float(settings.temperature if temperature_override is None else temperature_override)
         max_tokens = int(settings.max_tokens if max_tokens_override is None else max_tokens_override)
         started_at = time.perf_counter()
+        telemetry = self._observability_service.telemetry_service if self._observability_service is not None else None
 
         cache_key = self._make_cache_key(
             task=task,
@@ -135,65 +137,151 @@ class CachedLLMService:
             messages=messages,
         )
 
-        if use_cache and cache_key in self._cache_data:
-            cached_entry = self._cache_data[cache_key]
-            cached_response = self._extract_cached_response(cached_entry)
-            usage = self._extract_cached_usage(cached_entry)
-            self._record_observability(
-                task=task,
-                model=model,
-                cache_hit=True,
-                started_at=started_at,
-                request_id=request_id,
-                usage=usage,
-                error="",
+        context_scope = telemetry.context_scope(request_id=request_id) if telemetry is not None else _null_context()
+        with context_scope:
+            span_scope = (
+                telemetry.start_span(
+                    name="llm.call",
+                    component="llm.cached_service",
+                    attrs={
+                        "task": task,
+                        "model": model,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                        "use_cache": bool(use_cache),
+                    },
+                )
+                if telemetry is not None
+                else _null_context()
             )
-            return cached_response, True
+            with span_scope:
+                if use_cache and cache_key in self._cache_data:
+                    cached_entry = self._cache_data[cache_key]
+                    cached_response = self._extract_cached_response(cached_entry)
+                    usage = self._extract_cached_usage(cached_entry)
+                    self._record_observability(
+                        task=task,
+                        model=model,
+                        cache_hit=True,
+                        started_at=started_at,
+                        request_id=request_id,
+                        usage=usage,
+                        error="",
+                    )
+                    if telemetry is not None:
+                        payload_ref = telemetry.attach_payload(
+                            payload={
+                                "task": task,
+                                "label": label,
+                                "topic": topic,
+                                "messages": messages,
+                                "response": cached_response,
+                            },
+                            kind="llm_cache_hit",
+                        )
+                        telemetry.record_event(
+                            ObservabilityEvent(
+                                event_name="llm.cache.hit",
+                                component="llm.cached_service",
+                                status="ok",
+                                timestamp=_now_iso(),
+                                attributes={"task": task, "model": model},
+                                payload_ref=payload_ref,
+                            )
+                        )
+                    return cached_response, True
 
-        try:
-            response = self._complete_with_optional_metadata(
-                api_key=settings.api_key,
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                messages=messages,
-            )
-        except Exception as exc:  # noqa: BLE001
-            self._record_observability(
-                task=task,
-                model=model,
-                cache_hit=False,
-                started_at=started_at,
-                request_id=request_id,
-                usage=None,
-                error=str(exc),
-            )
-            raise
+                try:
+                    response = self._complete_with_optional_metadata(
+                        api_key=settings.api_key,
+                        model=model,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        messages=messages,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    self._record_observability(
+                        task=task,
+                        model=model,
+                        cache_hit=False,
+                        started_at=started_at,
+                        request_id=request_id,
+                        usage=None,
+                        error=str(exc),
+                    )
+                    if telemetry is not None:
+                        payload_ref = telemetry.attach_payload(
+                            payload={
+                                "task": task,
+                                "label": label,
+                                "topic": topic,
+                                "messages": messages,
+                                "error": str(exc),
+                            },
+                            kind="llm_call_error",
+                        )
+                        telemetry.record_event(
+                            ObservabilityEvent(
+                                event_name="llm.call.error",
+                                component="llm.cached_service",
+                                status="error",
+                                timestamp=_now_iso(),
+                                attributes={"task": task, "model": model, "error": str(exc)},
+                                payload_ref=payload_ref,
+                            )
+                        )
+                    raise
 
-        response_text = response.text
-        usage = response.usage
+                response_text = response.text
+                usage = response.usage
 
-        self._record_observability(
-            task=task,
-            model=model,
-            cache_hit=False,
-            started_at=started_at,
-            request_id=request_id,
-            usage=usage,
-            error="",
-        )
+                self._record_observability(
+                    task=task,
+                    model=model,
+                    cache_hit=False,
+                    started_at=started_at,
+                    request_id=request_id,
+                    usage=usage,
+                    error="",
+                )
 
-        if use_cache:
-            self._cache_data[cache_key] = {
-                "response": response_text,
-                "topic": topic,
-                "model": model,
-                "task": task,
-                "label": label,
-                "usage": self._usage_to_cache_dict(usage),
-            }
-            self._cache_store.save(self._cache_data)
-        return response_text, False
+                if use_cache:
+                    self._cache_data[cache_key] = {
+                        "response": response_text,
+                        "topic": topic,
+                        "model": model,
+                        "task": task,
+                        "label": label,
+                        "usage": self._usage_to_cache_dict(usage),
+                    }
+                    self._cache_store.save(self._cache_data)
+                if telemetry is not None:
+                    payload_ref = telemetry.attach_payload(
+                        payload={
+                            "task": task,
+                            "label": label,
+                            "topic": topic,
+                            "messages": messages,
+                            "response": response_text,
+                            "usage": self._usage_to_cache_dict(usage),
+                        },
+                        kind="llm_call",
+                    )
+                    telemetry.record_event(
+                        ObservabilityEvent(
+                            event_name="llm.call.success",
+                            component="llm.cached_service",
+                            status="ok",
+                            timestamp=_now_iso(),
+                            attributes={
+                                "task": task,
+                                "model": model,
+                                "cache_write": bool(use_cache),
+                            },
+                            payload_ref=payload_ref,
+                        )
+                    )
+                return response_text, False
 
     @staticmethod
     def _make_cache_key(
@@ -305,3 +393,18 @@ class CachedLLMService:
             "completion_tokens": int(usage.completion_tokens),
             "total_tokens": int(usage.total_tokens),
         }
+
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+from contextlib import contextmanager
+from typing import Iterator
+
+
+@contextmanager
+def _null_context() -> Iterator[None]:
+    yield

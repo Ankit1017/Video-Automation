@@ -78,6 +78,15 @@ AUDIO_OVERVIEW_TAB_CSS = """
 """
 
 
+_AUDIO_DEFAULT_USE_HINGLISH_SCRIPT = False
+
+
+def _resolve_audio_language(*, selected_language: str, use_hinglish_script: bool) -> str:
+    if use_hinglish_script:
+        return "hi"
+    return " ".join(str(selected_language).split()).strip() or "en"
+
+
 def render_audio_overview_tab(
     *,
     audio_overview_service: AudioOverviewService,
@@ -149,6 +158,11 @@ def render_audio_overview_tab(
             value=False,
             key="audio_overview_use_youtube_prompt",
         )
+        use_hinglish_script = st.checkbox(
+            "Use Hinglish narration script (Roman)",
+            value=_AUDIO_DEFAULT_USE_HINGLISH_SCRIPT,
+            key="audio_overview_use_hinglish_script",
+        )
         generate_audio_overview = st.button(
             "Generate Audio Overview",
             type="primary",
@@ -169,6 +183,10 @@ def render_audio_overview_tab(
 
         topic_clean = topic.strip()
         constraints_clean = constraints.strip()
+        playback_language = _resolve_audio_language(
+            selected_language=language,
+            use_hinglish_script=bool(use_hinglish_script),
+        )
 
         def _worker(context: BackgroundJobContext) -> dict[str, Any]:
             context.update_progress(progress=0.1, message="Generating podcast script...")
@@ -179,6 +197,7 @@ def render_audio_overview_tab(
                 conversation_style=conversation_style,
                 constraints=constraints_clean,
                 use_youtube_prompt=use_youtube_prompt,
+                use_hinglish_script=bool(use_hinglish_script),
                 settings=settings,
             )
             context.raise_if_cancelled()
@@ -190,7 +209,7 @@ def render_audio_overview_tab(
                 context.update_progress(progress=0.65, message="Synthesizing audio...")
                 audio_bytes, synth_error = audio_overview_service.synthesize_mp3(
                     overview_payload=payload,
-                    language=language,
+                    language=playback_language,
                     slow=slow_audio,
                 )
                 audio_error = synth_error or ""
@@ -200,12 +219,13 @@ def render_audio_overview_tab(
             return {
                 "topic": topic_clean,
                 "constraints": constraints_clean,
-                "language": language,
+                "language": playback_language,
                 "slow_audio": bool(slow_audio),
                 "result": result,
                 "audio_bytes": audio_bytes,
                 "audio_error": audio_error,
                 "youtube_prompt": use_youtube_prompt,
+                "use_hinglish_script": bool(use_hinglish_script),
             }
 
         job_id = job_manager.submit(
@@ -461,6 +481,7 @@ def _apply_audio_overview_job_result(
     language = " ".join(str(payload.get("language", "en")).split()).strip() or "en"
     slow_audio = bool(payload.get("slow_audio", False))
     youtube_prompt = bool(payload.get("youtube_prompt", False))
+    use_hinglish_script = bool(payload.get("use_hinglish_script", False))
     audio_bytes = payload.get("audio_bytes")
     audio_error = " ".join(str(payload.get("audio_error", "")).split()).strip()
 
@@ -472,6 +493,7 @@ def _apply_audio_overview_job_result(
     st.session_state.audio_overview_tts_language = language
     st.session_state.audio_overview_tts_slow = slow_audio
     st.session_state.audio_overview_use_youtube_prompt = youtube_prompt
+    st.session_state.audio_overview_use_hinglish_script = use_hinglish_script
 
     if cache_hit:
         st.info("Audio script served from cache.")

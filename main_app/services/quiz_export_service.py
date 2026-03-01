@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from io import BytesIO
+from time import perf_counter
 from typing import Any
+from typing import Iterator
 
+from main_app.services.observability_service import ensure_request_id
+from main_app.services.telemetry_service import ObservabilityEvent, TelemetryService
 
 @dataclass(frozen=True)
 class _QuizTemplateStyle:
@@ -71,6 +76,9 @@ class QuizExportService:
         ),
     )
 
+    def __init__(self, *, telemetry_service: TelemetryService | None = None) -> None:
+        self._telemetry_service = telemetry_service
+
     def list_templates(self) -> list[dict[str, str]]:
         return [
             {
@@ -88,6 +96,24 @@ class QuizExportService:
         questions: list[dict[str, Any]],
         template_key: str,
     ) -> tuple[bytes | None, str | None]:
+        request_id = ensure_request_id()
+        started_at = perf_counter()
+        context_scope = (
+            self._telemetry_service.context_scope(request_id=request_id)
+            if self._telemetry_service is not None
+            else _null_context()
+        )
+        with context_scope:
+            if self._telemetry_service is not None:
+                self._telemetry_service.record_event(
+                    ObservabilityEvent(
+                        event_name="export.quiz.start",
+                        component="export.quiz_pdf",
+                        status="started",
+                        timestamp=_now_iso(),
+                        attributes={"template_key": template_key, "question_count": len(questions)},
+                    )
+                )
         try:
             from reportlab.lib import colors  # type: ignore
             from reportlab.lib.pagesizes import A4  # type: ignore
@@ -248,8 +274,59 @@ class QuizExportService:
                 )
 
             document.build(story, onFirstPage=on_page, onLaterPages=on_page)
-            return output.getvalue(), None
+            output_bytes = output.getvalue()
+            if self._telemetry_service is not None:
+                duration_ms = max((perf_counter() - started_at) * 1000.0, 0.0)
+                payload_ref = self._telemetry_service.attach_payload(
+                    payload={"topic": topic, "template_key": template_key, "question_count": len(normalized_questions)},
+                    kind="quiz_export",
+                )
+                self._telemetry_service.record_metric(
+                    name="export_quiz_duration_ms",
+                    value=duration_ms,
+                    attrs={"status": "ok", "template_key": template_key},
+                )
+                self._telemetry_service.record_metric(
+                    name="export_quiz_bytes_total",
+                    value=float(len(output_bytes)),
+                    attrs={"status": "ok", "template_key": template_key},
+                )
+                self._telemetry_service.record_event(
+                    ObservabilityEvent(
+                        event_name="export.quiz.end",
+                        component="export.quiz_pdf",
+                        status="ok",
+                        timestamp=_now_iso(),
+                        attributes={
+                            "template_key": template_key,
+                            "duration_ms": round(duration_ms, 3),
+                            "bytes": len(output_bytes),
+                        },
+                        payload_ref=payload_ref,
+                    )
+                )
+            return output_bytes, None
         except (OSError, ValueError, TypeError, AttributeError) as exc:
+            if self._telemetry_service is not None:
+                duration_ms = max((perf_counter() - started_at) * 1000.0, 0.0)
+                self._telemetry_service.record_metric(
+                    name="export_quiz_duration_ms",
+                    value=duration_ms,
+                    attrs={"status": "error", "template_key": template_key},
+                )
+                self._telemetry_service.record_event(
+                    ObservabilityEvent(
+                        event_name="export.quiz.end",
+                        component="export.quiz_pdf",
+                        status="error",
+                        timestamp=_now_iso(),
+                        attributes={
+                            "template_key": template_key,
+                            "duration_ms": round(duration_ms, 3),
+                            "error": str(exc),
+                        },
+                    )
+                )
             return None, f"Failed to generate quiz PDF: {exc}"
 
     def _resolve_template(self, template_key: str) -> _QuizTemplateStyle:
@@ -319,3 +396,14 @@ class QuizExportService:
             .replace("<", "&lt;")
             .replace(">", "&gt;")
         )
+
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+@contextmanager
+def _null_context() -> Iterator[None]:
+    yield

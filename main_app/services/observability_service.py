@@ -11,6 +11,8 @@ from threading import Lock
 from typing import Any, Iterator
 from uuid import uuid4
 
+from main_app.services.telemetry_service import ObservabilityEvent, TelemetryService
+
 
 logger = logging.getLogger(__name__)
 
@@ -134,11 +136,13 @@ class ObservabilityService:
         *,
         default_input_cost_per_1m_usd: float | None = None,
         default_output_cost_per_1m_usd: float | None = None,
+        telemetry_service: TelemetryService | None = None,
     ) -> None:
         self._lock = Lock()
         self._asset_metrics: dict[str, _AssetMetricsAccumulator] = {}
         self._last_request_id = ""
         self._last_updated_at = ""
+        self._telemetry_service = telemetry_service or TelemetryService()
         self._default_rate = _ModelCostRate(
             input_per_1m_tokens_usd=self._resolve_cost_value(
                 explicit=default_input_cost_per_1m_usd,
@@ -152,6 +156,10 @@ class ObservabilityService:
         self._model_cost_overrides = self._parse_model_cost_overrides(
             os.getenv("LLM_MODEL_COST_OVERRIDES_JSON", "")
         )
+
+    @property
+    def telemetry_service(self) -> TelemetryService:
+        return self._telemetry_service
 
     def resolve_asset_name(self, task: str) -> str:
         normalized_task = " ".join(str(task).split()).strip().lower()
@@ -233,6 +241,72 @@ class ObservabilityService:
                 ensure_ascii=False,
             )
         )
+        attrs = {
+            "asset": asset,
+            "task": normalized_task,
+            "model": normalized_model,
+            "cache_hit": bool(cache_hit),
+            "latency_ms": round(normalized_latency_ms, 3),
+            "prompt_tokens": normalized_prompt_tokens,
+            "completion_tokens": normalized_completion_tokens,
+            "total_tokens": normalized_total_tokens,
+            "estimated_cost_usd": round(estimated_cost_usd, 8),
+            "error": normalized_error,
+        }
+        with self._telemetry_service.context_scope(request_id=normalized_request_id):
+            payload_ref = self._telemetry_service.attach_payload(
+                payload={
+                    "task": normalized_task,
+                    "model": normalized_model,
+                    "cache_hit": bool(cache_hit),
+                    "latency_ms": normalized_latency_ms,
+                    "prompt_tokens": normalized_prompt_tokens,
+                    "completion_tokens": normalized_completion_tokens,
+                    "total_tokens": normalized_total_tokens,
+                    "estimated_cost_usd": estimated_cost_usd,
+                    "error": normalized_error,
+                },
+                kind="llm_call",
+            )
+            self._telemetry_service.record_metric(
+                name="llm_calls_total",
+                value=1.0,
+                attrs={
+                    "asset": asset,
+                    "task": normalized_task,
+                    "model": normalized_model,
+                    "cache_hit": bool(cache_hit),
+                },
+            )
+            self._telemetry_service.record_metric(
+                name="llm_latency_ms",
+                value=normalized_latency_ms,
+                attrs={
+                    "asset": asset,
+                    "task": normalized_task,
+                    "model": normalized_model,
+                },
+            )
+            if normalized_total_tokens > 0:
+                self._telemetry_service.record_metric(
+                    name="llm_tokens_total",
+                    value=float(normalized_total_tokens),
+                    attrs={
+                        "asset": asset,
+                        "task": normalized_task,
+                        "model": normalized_model,
+                    },
+                )
+            self._telemetry_service.record_event(
+                ObservabilityEvent(
+                    event_name="llm.call",
+                    component="llm",
+                    status="error" if bool(normalized_error) else "ok",
+                    timestamp=_utc_now_iso(),
+                    attributes=attrs,
+                    payload_ref=payload_ref,
+                )
+            )
 
     def current_request_id(self) -> str:
         current = get_request_id()
@@ -342,6 +416,50 @@ class ObservabilityService:
             self._asset_metrics.clear()
             self._last_request_id = ""
             self._last_updated_at = ""
+        self._telemetry_service.reset_runtime_buffers()
+
+    @contextmanager
+    def start_span(
+        self,
+        *,
+        name: str,
+        component: str,
+        attrs: dict[str, Any] | None = None,
+    ) -> Iterator[dict[str, str]]:
+        with self._telemetry_service.start_span(name=name, component=component, attrs=attrs):
+            context = self._telemetry_service.current_context()
+            yield {
+                "request_id": context.request_id,
+                "session_id": context.session_id,
+                "run_id": context.run_id,
+                "job_id": context.job_id,
+                "trace_id": context.trace_id,
+                "span_id": context.span_id,
+            }
+
+    def record_metric(self, *, name: str, value: float, attrs: dict[str, Any] | None = None) -> None:
+        self._telemetry_service.record_metric(name=name, value=value, attrs=attrs)
+
+    def record_event(self, event: ObservabilityEvent | dict[str, Any]) -> None:
+        self._telemetry_service.record_event(event)
+
+    def attach_payload(self, *, payload: Any, kind: str) -> str:
+        return self._telemetry_service.attach_payload(payload=payload, kind=kind)
+
+    def telemetry_overview(self) -> dict[str, Any]:
+        return self._telemetry_service.telemetry_overview()
+
+    def telemetry_metric_rows(self) -> list[dict[str, Any]]:
+        return self._telemetry_service.telemetry_metric_rows()
+
+    def telemetry_recent_metric_rows(self, *, limit: int = 500) -> list[dict[str, Any]]:
+        return self._telemetry_service.recent_metric_rows(limit=limit)
+
+    def telemetry_recent_event_rows(self, *, limit: int = 200) -> list[dict[str, Any]]:
+        return self._telemetry_service.recent_event_rows(limit=limit)
+
+    def fetch_payload(self, payload_ref: str) -> dict[str, Any] | None:
+        return self._telemetry_service.fetch_payload(payload_ref)
 
     @staticmethod
     def _resolve_cost_value(*, explicit: float | None, env_name: str) -> float:

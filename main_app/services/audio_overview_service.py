@@ -18,6 +18,13 @@ class AudioOverviewService:
         "- Prefer concrete examples and audience-oriented clarity.\n"
         "- Avoid aggressive like/subscribe/click CTA language.\n"
     )
+    _HINGLISH_PROMPT_BLOCK = (
+        "Optional script language mode: Roman Hinglish.\n"
+        "- Write natural spoken Hinglish with Hindi + English mixed in each dialogue turn.\n"
+        "- Use only Latin/Roman script (no Devanagari).\n"
+        "- Keep lines concise, educational, and spoken-friendly.\n"
+        "- Preserve technical terms in English when clearer.\n"
+    )
 
     _VOICE_POOL_BY_LANGUAGE = {
         "en": [
@@ -69,6 +76,7 @@ class AudioOverviewService:
         conversation_style: str,
         constraints: str,
         use_youtube_prompt: bool = False,
+        use_hinglish_script: bool = False,
         settings: GroqSettings,
     ) -> AudioOverviewGenerationResult:
         requested_speakers = max(2, min(int(speaker_count), 6))
@@ -106,6 +114,8 @@ class AudioOverviewService:
 
         if constraints.strip():
             user_prompt += f"\n\nAdditional constraints:\n{constraints.strip()}"
+        if use_hinglish_script:
+            user_prompt += "\n\n" + self._HINGLISH_PROMPT_BLOCK
         if use_youtube_prompt:
             user_prompt += "\n\n" + self._YOUTUBE_PROMPT_BLOCK
 
@@ -160,6 +170,7 @@ class AudioOverviewService:
                     "conversation_style": conversation_style.strip(),
                     "constraints": constraints.strip(),
                     "youtube_prompt": bool(use_youtube_prompt),
+                    "hinglish_script": bool(use_hinglish_script),
                 },
                 result_payload=parsed_overview if parsed_overview is not None else {},
                 status="error" if parse_error else "success",

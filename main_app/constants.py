@@ -6,13 +6,16 @@ APP_TITLE = "Knowledge App"
 APP_DESCRIPTION = (
     "Use separate tabs for detailed explanations, hierarchical mind maps, interactive flashcards, "
     "report generation, data table building, quiz practice, slide creation, narrated video generation, "
-    "audio overviews, chat intent detection, agent dashboard chat orchestration, and asset history."
+    "audio overviews, web sourcing checks, documentation center guidance, chat intent detection, "
+    "agent dashboard chat orchestration, and asset history."
 )
 
 CACHE_FILE = Path(".cache/llm_cache.json")
 QUIZ_HISTORY_FILE = Path(".cache/quiz_history.json")
 AGENT_DASHBOARD_SESSIONS_FILE = Path(".cache/agent_dashboard_sessions.json")
 ASSET_HISTORY_FILE = Path(".cache/asset_history.json")
+RUN_LEDGER_FILE = Path(".cache/run_ledger.json")
+STAGE_LEDGER_FILE = Path(".cache/stage_ledger.json")
 SESSION_DEFAULT_OVERRIDES_FILE = Path(".cache/session_default_overrides.json")
 PRESET_MODELS = [
     "llama-3.1-8b-instant",
@@ -44,6 +47,7 @@ TAB_TITLES = [
     "Audio Overview",
     "Web Sourcing Check",
     "Cache Center",
+    "Documentation Center",
     "Observability",
     "Additional Settings",
     "Chat Bot Intent",

@@ -1,0 +1,1 @@
+{"kind": "quiz_export", "created_at": "2026-03-01T13:59:02+00:00", "context": {"request_id": "req_5690fc1ede8f", "session_id": "sess_9999d1c1d288", "run_id": "", "job_id": "", "trace_id": "ccfbabb49ae64c488c0acea3a0c4c9fe", "span_id": "88f81da173654cdc"}, "payload": {"topic": "Personality", "template_key": "clean_light", "question_count": 10}}

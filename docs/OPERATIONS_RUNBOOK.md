@@ -33,6 +33,19 @@ streamlit run app.py
 - `WORKFLOW_FAIL_POLICY`
 - `EXECUTE_RETRY_COUNT`
 
+### Observability / Telemetry
+
+- `OBSERVABILITY_OTEL_ENABLED`
+- `OTEL_SERVICE_NAME`
+- `OTEL_EXPORTER_OTLP_ENDPOINT`
+- `OTEL_EXPORTER_OTLP_INSECURE`
+- `OBSERVABILITY_PAYLOAD_CAPTURE_ENABLED`
+- `OBSERVABILITY_PAYLOAD_RETENTION_DAYS`
+- `OBSERVABILITY_PAYLOAD_VAULT_DIR`
+- `OBSERVABILITY_PAYLOAD_ENCRYPTION_ENABLED`
+- `OBSERVABILITY_PAYLOAD_ENCRYPTION_KEY`
+- `OBSERVABILITY_PAYLOAD_KEY_FILE`
+
 ### Web Sourcing
 
 - `SERPER_API_KEY` (if provider is `serper`)
@@ -77,6 +90,48 @@ python scripts/check_import_cycles.py --package main_app --check-boundaries
 python scripts/check_import_cycles.py --package main_app --check-boundaries
 ```
 
+### E) OTel exporter unavailable (`localhost:4317` / `StatusCode.UNAVAILABLE`)
+
+- Symptom: repeated metric export retry logs.
+- Cause: OTLP collector is not reachable.
+- Action:
+
+```powershell
+cd observability
+docker compose up -d
+docker compose ps
+```
+
+Or disable exporter for local-only mode:
+
+```powershell
+$env:OBSERVABILITY_OTEL_ENABLED="false"
+```
+
+### F) Windows Docker pipe error (`dockerDesktopLinuxEngine` not found)
+
+- Symptom: `open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`.
+- Cause: Docker Desktop Linux backend is not running (often WSL not installed/enabled).
+- Action:
+
+1. Ensure WSL is installed:
+
+```powershell
+wsl --install
+```
+
+2. Reboot machine.
+3. Start Docker Desktop and wait until engine is healthy.
+4. Select Docker context:
+
+```powershell
+docker context use desktop-linux
+docker version
+docker ps
+```
+
+5. Retry compose stack startup in `observability/`.
+
 ## 5) Operational Diagnostics to Watch
 
 - Stage duration and retries
@@ -84,3 +139,5 @@ python scripts/check_import_cycles.py --package main_app --check-boundaries
 - Web sourcing accepted count and quality stats
 - Cache hit/miss behavior
 - Workflow node blocked/failed transitions
+- End-to-end trace stitched by `request_id` and `run_id`
+- Payload references (`payload_ref`) for deep forensic inspection

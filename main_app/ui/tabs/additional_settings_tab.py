@@ -28,6 +28,7 @@ _GROUP_CONFIG: dict[str, dict[str, tuple[str, ...]]] = {
     "Web Sourcing": {"prefixes": ("web_sourcing_",)},
     "Cache": {"prefixes": ("cache_center_",)},
     "Observability": {"prefixes": ("observability_",)},
+    "Documentation": {"prefixes": ("documentation_",)},
     "Video": {"prefixes": ("video_",)},
     "Slideshow": {"prefixes": ("slideshow_",)},
     "Quiz": {"prefixes": ("quiz_",)},

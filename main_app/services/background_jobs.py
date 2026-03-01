@@ -8,6 +8,7 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from main_app.services.observability_service import create_request_id, request_id_scope
+from main_app.services.telemetry_service import ObservabilityEvent, TelemetryService
 
 
 BackgroundJobWorker = Callable[["BackgroundJobContext"], Any]
@@ -89,11 +90,12 @@ class _BackgroundJobState:
 
 
 class BackgroundJobManager:
-    def __init__(self, *, max_workers: int = 2) -> None:
+    def __init__(self, *, max_workers: int = 2, telemetry_service: TelemetryService | None = None) -> None:
         self._executor = ThreadPoolExecutor(max_workers=max(1, int(max_workers)))
         self._lock = Lock()
         self._jobs: dict[str, _BackgroundJobState] = {}
         self._order_counter = 0
+        self._telemetry_service = telemetry_service
 
     def submit(
         self,
@@ -135,6 +137,28 @@ class BackgroundJobManager:
             self._order_counter += 1
             state.order_index = self._order_counter
             self._jobs[job_id] = state
+
+        if self._telemetry_service is not None:
+            with self._telemetry_service.context_scope(request_id=request_id, job_id=job_id):
+                payload_ref = self._telemetry_service.attach_payload(
+                    payload={"label": state.label, "metadata": metadata_payload},
+                    kind="background_job_submit",
+                )
+                self._telemetry_service.record_event(
+                    ObservabilityEvent(
+                        event_name="background_job.submit",
+                        component="background_jobs.manager",
+                        status="queued",
+                        timestamp=self._now_iso(),
+                        attributes={"job_id": job_id, "label": state.label},
+                        payload_ref=payload_ref,
+                    )
+                )
+                self._telemetry_service.record_metric(
+                    name="background_jobs_submitted_total",
+                    value=1.0,
+                    attrs={"label": state.label},
+                )
 
         future = self._executor.submit(self._run_job, job_id)
         with self._lock:
@@ -250,51 +274,112 @@ class BackgroundJobManager:
             job_request_id = state.request_id
 
         with request_id_scope(job_request_id):
-            with self._lock:
-                state = self._jobs.get(job_id)
-                if state is None:
-                    return
-                if state.cancel_event.is_set():
-                    state.status = "cancelled"
-                    state.message = "Cancelled before execution."
-                    state.finished_at = self._now_iso()
-                    return
-                state.status = "running"
-                state.started_at = self._now_iso()
-                state.message = "Running"
-                state.progress = max(state.progress, 0.01)
+            telemetry_scope = (
+                self._telemetry_service.context_scope(request_id=job_request_id, job_id=job_id)
+                if self._telemetry_service is not None
+                else _null_context()
+            )
+            with telemetry_scope:
+                span_scope = (
+                    self._telemetry_service.start_span(
+                        name="background_job.run",
+                        component="background_jobs.manager",
+                        attrs={"job_id": job_id},
+                    )
+                    if self._telemetry_service is not None
+                    else _null_context()
+                )
+                with span_scope:
+                    with self._lock:
+                        state = self._jobs.get(job_id)
+                        if state is None:
+                            return
+                        if state.cancel_event.is_set():
+                            state.status = "cancelled"
+                            state.message = "Cancelled before execution."
+                            state.finished_at = self._now_iso()
+                            return
+                        state.status = "running"
+                        state.started_at = self._now_iso()
+                        state.message = "Running"
+                        state.progress = max(state.progress, 0.01)
 
-            context = BackgroundJobContext(manager=self, job_id=job_id)
-            try:
-                context.raise_if_cancelled()
-                result = state.worker(context)
-                context.raise_if_cancelled()
-                with self._lock:
-                    persisted = self._jobs.get(job_id)
-                    if persisted is None:
-                        return
-                    persisted.result = result
-                    persisted.status = "completed"
-                    persisted.progress = 1.0
-                    persisted.message = "Completed"
-                    persisted.finished_at = self._now_iso()
-            except JobCancelledError:
-                with self._lock:
-                    persisted = self._jobs.get(job_id)
-                    if persisted is None:
-                        return
-                    persisted.status = "cancelled"
-                    persisted.message = "Cancelled"
-                    persisted.finished_at = self._now_iso()
-            except (AttributeError, KeyError, RuntimeError, TypeError, ValueError, OSError) as exc:
-                with self._lock:
-                    persisted = self._jobs.get(job_id)
-                    if persisted is None:
-                        return
-                    persisted.status = "failed"
-                    persisted.error = str(exc)
-                    persisted.message = "Failed"
-                    persisted.finished_at = self._now_iso()
+                    context = BackgroundJobContext(manager=self, job_id=job_id)
+                    try:
+                        context.raise_if_cancelled()
+                        result = state.worker(context)
+                        context.raise_if_cancelled()
+                        with self._lock:
+                            persisted = self._jobs.get(job_id)
+                            if persisted is None:
+                                return
+                            persisted.result = result
+                            persisted.status = "completed"
+                            persisted.progress = 1.0
+                            persisted.message = "Completed"
+                            persisted.finished_at = self._now_iso()
+                        if self._telemetry_service is not None:
+                            self._telemetry_service.record_metric(
+                                name="background_jobs_completed_total",
+                                value=1.0,
+                                attrs={},
+                            )
+                            self._telemetry_service.record_event(
+                                ObservabilityEvent(
+                                    event_name="background_job.end",
+                                    component="background_jobs.manager",
+                                    status="completed",
+                                    timestamp=self._now_iso(),
+                                    attributes={"job_id": job_id},
+                                )
+                            )
+                    except JobCancelledError:
+                        with self._lock:
+                            persisted = self._jobs.get(job_id)
+                            if persisted is None:
+                                return
+                            persisted.status = "cancelled"
+                            persisted.message = "Cancelled"
+                            persisted.finished_at = self._now_iso()
+                        if self._telemetry_service is not None:
+                            self._telemetry_service.record_metric(
+                                name="background_jobs_cancelled_total",
+                                value=1.0,
+                                attrs={},
+                            )
+                            self._telemetry_service.record_event(
+                                ObservabilityEvent(
+                                    event_name="background_job.end",
+                                    component="background_jobs.manager",
+                                    status="cancelled",
+                                    timestamp=self._now_iso(),
+                                    attributes={"job_id": job_id},
+                                )
+                            )
+                    except (AttributeError, KeyError, RuntimeError, TypeError, ValueError, OSError) as exc:
+                        with self._lock:
+                            persisted = self._jobs.get(job_id)
+                            if persisted is None:
+                                return
+                            persisted.status = "failed"
+                            persisted.error = str(exc)
+                            persisted.message = "Failed"
+                            persisted.finished_at = self._now_iso()
+                        if self._telemetry_service is not None:
+                            self._telemetry_service.record_metric(
+                                name="background_jobs_failed_total",
+                                value=1.0,
+                                attrs={},
+                            )
+                            self._telemetry_service.record_event(
+                                ObservabilityEvent(
+                                    event_name="background_job.end",
+                                    component="background_jobs.manager",
+                                    status="failed",
+                                    timestamp=self._now_iso(),
+                                    attributes={"job_id": job_id, "error": str(exc)},
+                                )
+                            )
 
     def _set_progress(self, *, job_id: str, progress: float, message: str | None) -> None:
         with self._lock:
@@ -313,3 +398,12 @@ class BackgroundJobManager:
     @staticmethod
     def _now_iso() -> str:
         return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+from contextlib import contextmanager
+from typing import Iterator
+
+
+@contextmanager
+def _null_context() -> Iterator[None]:
+    yield

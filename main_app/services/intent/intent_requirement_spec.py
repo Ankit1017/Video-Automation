@@ -205,6 +205,11 @@ REQUIREMENT_SPEC: RequirementSpecMap = {
                 "type": "bool",
                 "default": False,
             },
+            "hinglish_script": {
+                "label": "Use Hinglish Script",
+                "type": "bool",
+                "default": False,
+            },
             "constraints": {
                 "label": "Constraints",
                 "type": "text",

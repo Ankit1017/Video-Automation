@@ -1,4 +1,4 @@
-# Video Automation Knowledge App
+# Hatched Studio
 
 An end-to-end Streamlit application for generating learning and media assets from a topic using LLM workflows, optional web grounding, and orchestration controls.
 
@@ -16,6 +16,7 @@ This project produces multiple asset types from one input topic:
 - Video payload + rendered media
 - Audio overview
 - Agent-driven multi-tool workflow outputs
+- In-app Documentation Center (UI + Debug modes)
 
 It supports both:
 
@@ -161,6 +162,19 @@ Orchestration/runtime controls:
 - `ENABLE_PARALLEL_DAG`
 - `WORKFLOW_FAIL_POLICY`
 
+Observability and telemetry:
+
+- `OBSERVABILITY_OTEL_ENABLED` (`true` by default)
+- `OTEL_SERVICE_NAME` (default: `hatched-studio-app`)
+- `OTEL_EXPORTER_OTLP_ENDPOINT` (default: `http://localhost:4317`)
+- `OTEL_EXPORTER_OTLP_INSECURE` (`true` by default for local stack)
+- `OBSERVABILITY_PAYLOAD_CAPTURE_ENABLED` (`true` by default)
+- `OBSERVABILITY_PAYLOAD_RETENTION_DAYS` (default: `14`)
+- `OBSERVABILITY_PAYLOAD_VAULT_DIR` (default: `.cache/observability_payloads`)
+- `OBSERVABILITY_PAYLOAD_ENCRYPTION_ENABLED` (`true` by default)
+- `OBSERVABILITY_PAYLOAD_ENCRYPTION_KEY` (optional; if unset, local key file is generated)
+- `OBSERVABILITY_PAYLOAD_KEY_FILE` (optional key file location)
+
 ## Development Commands
 
 ### Tests
@@ -194,6 +208,15 @@ python scripts/simulate_workflow.py --workflow full_asset_suite --dry
 python scripts/benchmark_web_sourcing.py --fixture tests/fixtures/web_queries.json --warn-only
 ```
 
+### Local OTel Stack (Tempo/Loki/Prometheus/Grafana)
+
+```powershell
+cd observability
+docker compose up -d
+```
+
+Grafana URL: `http://localhost:3000` (`admin` / `admin`)
+
 ## CI
 
 GitHub workflow (`.github/workflows/ci.yml`) runs:
@@ -218,6 +241,12 @@ GitHub workflow (`.github/workflows/ci.yml`) runs:
 - [Developer Onboarding Fastpath](docs/DEVELOPER_ONBOARDING_FASTPATH.md)
 - [Operations Runbook](docs/OPERATIONS_RUNBOOK.md)
 - [Operations Runbook v4](docs/OPERATIONS_RUNBOOK_V4.md)
+- [UI Documentation Reference](docs/UI_DOCUMENTATION_REFERENCE.md)
+- [Debug Documentation Reference](docs/DEBUG_DOCUMENTATION_REFERENCE.md)
+- [Observability Architecture](docs/OBSERVABILITY_ARCHITECTURE.md)
+- [Observability Tab Guide](docs/OBSERVABILITY_TAB_GUIDE.md)
+- [Observability Debug Cookbook](docs/OBSERVABILITY_DEBUG_COOKBOOK.md)
+- [Payload Logging Policy](docs/PAYLOAD_LOGGING_POLICY.md)
 - [Migration Guide Folder Restructure](docs/MIGRATION_GUIDE_FOLDER_RESTRUCTURE.md)
 - [Video Asset E2E Summary](docs/VIDEO_ASSET_CREATION_E2E_SUMMARY.md)
 

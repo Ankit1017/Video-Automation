@@ -230,6 +230,24 @@ class RunLedgerRecord(TypedDict, total=False):
     error_counts: dict[str, int]
 
 
+class TelemetryContextPayload(TypedDict, total=False):
+    request_id: str
+    session_id: str
+    run_id: str
+    job_id: str
+    trace_id: str
+    span_id: str
+
+
+class ObservabilityEventPayload(TypedDict, total=False):
+    event_name: str
+    component: str
+    status: str
+    timestamp: str
+    attributes: dict[str, JSONValue]
+    payload_ref: str
+
+
 class MindMapNode(TypedDict, total=False):
     name: str
     children: list["MindMapNode"]
