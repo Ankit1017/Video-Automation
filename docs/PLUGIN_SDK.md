@@ -1,76 +1,74 @@
 # Plugin SDK
 
+This repo uses lightweight plugin specs for tools and workflows.
+
 ## Tool Plugin Spec
 
-Tool plugins are declared with `ToolPluginSpec` and registered via tool registry adapters.
+Normalized by `normalize_tool_plugin_spec(...)`:
 
-Required fields:
-- `plugin_key`
-- `intent`
-- `execution_spec`
-
-Recommended fields:
+- `plugin_key` (snake_case key)
+- `intent` (normalized intent name)
 - `title`
 - `description`
-- `capabilities`
+- `capabilities` (auto-defaulted by intent if omitted)
+- `execution_spec` (stage profile, dependencies, policy profile, verify profile)
 - `schema_ref`
+  - `intent`
+  - `version`
+  - `id`
 
-Validation helper:
-- `main_app/plugins/sdk/plugin_sdk.py`
+Validation:
+
 - `validate_tool_plugin_spec(...)`
-- `normalize_tool_plugin_spec(...)`
-- `plugin_spec_fix_hints(...)`
-- `default_capabilities_for_intent(...)`
+- fix hints available through `plugin_spec_fix_hints(...)`
 
 ## Workflow Plugin Spec
 
-Workflow plugins are declared with `WorkflowPluginSpec`.
+Validated by `validate_workflow_plugin_spec(...)`:
 
-Required fields:
 - `workflow_key`
 - `tool_keys`
+- optional `tool_dependencies`
 
-Validation helper:
-- `validate_workflow_plugin_spec(...)`
+## Defaults by Intent
 
-## Scaffolding
+Capability defaults:
 
-Target structure for new plugins:
-- tool plugins: `main_app/plugins/tool_plugins/`
-- workflow plugins: `main_app/plugins/workflow_plugins/`
-- renderer plugins: `main_app/plugins/renderer_plugins/`
-- domain services: `main_app/domains/<intent>/services/`
+- text assets (`topic`, `report`) -> `generative_asset`, `text`
+- media assets (`video`, `audio_overview`) -> `generative_asset`, `media`
+- others -> `generative_asset`, `structured`
+
+Execution defaults (from tool registry builder):
+
+- verify profile inferred by intent (text/structured/media)
+- policy profile inferred by intent
+- dependency keys inferred from artifact adapter defaults when omitted
+
+## Validation Script
 
 Use:
 
-```bash
-python scripts/scaffold_tool_plugin.py --intent "new asset"
-```
-
-Advanced options:
-
-```bash
-python scripts/scaffold_tool_plugin.py \
-  --intent "new asset" \
-  --kind structured \
-  --depends-on artifact.topic.text \
-  --produces artifact.new_asset.primary \
-  --with-renderer true \
-  --with-workflow-key full_asset_suite
-```
-
-This creates:
-- plugin spec skeleton
-- schema file
-- unit test skeleton
-- optional renderer plugin skeleton
-
-## Fast Validation
-
-Run:
-
-```bash
+```powershell
 python scripts/validate_plugin_specs.py
-python scripts/simulate_workflow.py --workflow full_asset_suite --dry
-python scripts/dev_checks.py
 ```
+
+What it checks:
+
+1. Tool plugin spec validity
+2. Workflow plugin spec validity
+3. Schema file existence for each tool spec
+
+## Recommended Workflow for New Tool
+
+1. Add executor/plugin code.
+2. Register tool definition in default tool registry.
+3. Add schema JSON under `main_app/schemas/assets`.
+4. Run `scripts/validate_plugin_specs.py`.
+5. Add tests for registry + execution.
+
+## Related Files
+
+- `main_app/services/agent_dashboard/plugin_sdk.py`
+- `main_app/services/agent_dashboard/tool_registry.py`
+- `main_app/services/agent_dashboard/workflow_registry.py`
+- `scripts/validate_plugin_specs.py`

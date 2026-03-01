@@ -1,93 +1,86 @@
 # Operations Runbook
 
-## Runtime Controls
+Operational guide for running and troubleshooting the app in development/CI environments.
 
-Environment flags:
+## 1) Startup Checklist
 
-1. `USE_GENERIC_ASSET_FLOW`
-- `true` default
-- `false` uses linear fallback path
+1. Install dependencies (`requirements-dev.txt`).
+2. Verify LLM key input flow (sidebar Groq key).
+3. Confirm storage mode (`APP_STORE_BACKEND`).
+4. Run app:
 
-2. `ENABLE_VERIFY_STAGE`
-- `true` default
-- `false` disables verification stage
+```powershell
+streamlit run app.py
+```
 
-3. `WORKFLOW_FAIL_POLICY`
-- `continue` default
-- `fail_fast` stops workflow on first failed tool
+## 2) Runtime Controls
 
-4. `EXECUTE_RETRY_COUNT`
-- default `1`
-- retries only execute stage failures marked retryable
+### Storage
 
-5. `STAGE_TIMEOUT_MS`
-- global timeout default for stages
+- `APP_STORE_BACKEND=auto|json|mongo`
+- `MONGODB_URI` (required for forced mongo)
+- optional Mongo collection names (see `README.md`)
 
-6. `EXECUTE_STAGE_TIMEOUT_MS`
-- execute stage timeout override (default 30000ms)
+### Orchestration
 
-7. `VERIFY_STAGE_TIMEOUT_MS`
-- verify stage timeout override (default 5000ms)
+- `USE_GENERIC_ASSET_FLOW`
+- `ENABLE_VERIFY_STAGE`
+- `ENABLE_POLICY_GATE`
+- `POLICY_GATE_MODE`
+- `SCHEMA_VALIDATE_ENFORCE`
+- `MAX_PARALLEL_TOOLS`
+- `ENABLE_PARALLEL_DAG`
+- `WORKFLOW_FAIL_POLICY`
+- `EXECUTE_RETRY_COUNT`
 
-## Error Code Matrix
+### Web Sourcing
 
-1. `E_TOOL_NOT_REGISTERED`
-- tool intent was not mapped to an executor
+- `SERPER_API_KEY` (if provider is `serper`)
+- UI controls for strict mode, failover, retries, trusted domains, thresholds
 
-2. `E_PAYLOAD_MISSING_MANDATORY`
-- required payload fields were missing
+## 3) CI/Quality Commands
 
-3. `E_DEPENDENCY_MISSING`
-- required upstream artifact not available
+```powershell
+ruff check .
+mypy
+python -m pytest -q
+python scripts/validate_plugin_specs.py
+python scripts/simulate_workflow.py --workflow full_asset_suite --dry
+python scripts/check_import_cycles.py --package main_app --check-boundaries
+```
 
-4. `E_EXECUTOR_FAILED`
-- executor returned failure result
+## 4) Common Failure Cases
 
-5. `E_PARSE_FAILED`
-- parser path failed for structured generation
+### A) `SERPER_API_KEY` missing
 
-6. `E_ARTIFACT_NORMALIZATION_FAILED`
-- conversion to normalized artifact envelope failed
+- Symptom: web search fails when `serper` selected.
+- Action: switch provider to `duckduckgo` or set env key.
 
-7. `E_VERIFY_FAILED`
-- strict verification failed
+### B) Mongo backend startup failure
 
-8. `E_VERIFY_PROFILE_UNKNOWN`
-- unknown verify profile configured; fallback applied
+- Symptom: storage initialization error.
+- Action: set `APP_STORE_BACKEND=json` or provide valid `MONGODB_URI`.
 
-9. `E_ARTIFACT_SCHEMA_MISMATCH`
-- artifact shape did not satisfy schema gate
+### C) Schema/verify/policy stage failures
 
-10. `E_STAGE_TIMEOUT`
-- stage exceeded timeout budget
+- Symptom: tool status `error` despite executor return.
+- Action: inspect `artifact.provenance` for:
+  - `schema_validation`
+  - `verification`
+  - `policy_gate`
 
-11. `E_STAGE_EXCEPTION`
-- unexpected stage exception occurred
+### D) Import boundary warnings/failures
 
-12. `E_WORKFLOW_CYCLE`
-- workflow DAG cycle detected
+- Action:
 
-## Triage Flow
+```powershell
+python scripts/check_import_cycles.py --package main_app --check-boundaries
+```
 
-1. Identify failing asset/tool from notes (`run_id`, `tool_key`, `stage_key`)
-2. Inspect artifact error section:
-- `artifact.sections[*].data.code`
-- `artifact.sections[*].data.stage`
-- `artifact.sections[*].data.details`
-3. Inspect verification block:
-- `artifact.provenance.verification.status`
-- `artifact.provenance.verification.issues`
-4. Inspect stage metrics:
-- `artifact.metrics.stage_durations_ms`
-- `artifact.metrics.total_duration_ms`
-- `artifact.metrics.retry_count`
-5. Check dependency suppression notes when downstream tools fail after verify failure.
+## 5) Operational Diagnostics to Watch
 
-## SLO Snapshots
-
-Use `OpsReportingService` to compute:
-
-1. success rate by intent
-2. verify failure rate by intent
-3. top error codes
-4. total duration p50/p95
+- Stage duration and retries
+- Policy/verification issue counts
+- Web sourcing accepted count and quality stats
+- Cache hit/miss behavior
+- Workflow node blocked/failed transitions

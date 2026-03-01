@@ -1,29 +1,54 @@
 # Operations Runbook v4
 
+Focused operational profile for teams using full orchestration + web sourcing diagnostics.
+
 ## Core Signals
-- `run_id`: immutable id emitted once per plan execution.
-- `StageDiagnostic`: structured stage telemetry (`tool_key`, `intent`, `stage_key`, `attempt`, `duration_ms`, `error_code`).
-- `RunLedgerRecord`: durable run summary for workflow-level triage.
+
+Track these first:
+
+- workflow node state distribution (`completed/failed/blocked/skipped`)
+- stage retry counts + timeout incidents
+- policy/schema/verify gate failure rate
+- web sourcing accepted source count and fallback/failover usage
+- cache hit ratio (LLM + web caches)
 
 ## Triage Order
-1. Find run by `run_id`.
-2. Check run status and `error_counts`.
-3. Inspect failing tool summaries.
-4. Inspect stage diagnostics for first failing stage.
-5. If `verify_result` passed but `policy_gate_result` failed, inspect policy issues in artifact provenance.
 
-## Runtime Flags
-- `ENABLE_PARALLEL_DAG=true|false`
-- `MAX_PARALLEL_TOOLS=1..16`
-- `ENABLE_POLICY_GATE=true|false`
-- `POLICY_GATE_MODE=strict|warn_only`
-- `RUN_LEDGER_RETENTION_DAYS=1..3650`
+1. **Configuration sanity**
+   - storage mode, API keys, gate flags
+2. **Workflow-level health**
+   - which tools failed or blocked
+3. **Stage diagnostics**
+   - exact failing stage and error code
+4. **Artifact provenance**
+   - schema/verification/policy summaries
+5. **Provider diagnostics**
+   - web provider attempts, circuit state, retries
 
-## Common Error Codes
-- `E_STAGE_TIMEOUT`
-- `E_STAGE_EXCEPTION`
+## Recommended Runtime Flags (Stable Defaults)
+
+- `USE_GENERIC_ASSET_FLOW=true`
+- `ENABLE_VERIFY_STAGE=true`
+- `ENABLE_POLICY_GATE=true`
+- `POLICY_GATE_MODE=strict`
+- `SCHEMA_VALIDATE_ENFORCE=true`
+- `ENABLE_PARALLEL_DAG=true`
+- `MAX_PARALLEL_TOOLS=2`
+- `WORKFLOW_FAIL_POLICY=continue`
+
+## Common Error Code Buckets
+
+- `E_SCHEMA_VALIDATION_FAILED`
 - `E_VERIFY_FAILED`
 - `E_POLICY_GATE_FAILED`
-- `E_PARALLEL_SCHEDULER_FAILURE`
-- `E_RUN_LEDGER_WRITE_FAILED`
-- `E_DEDUP_SIGNATURE_INVALID`
+- `E_STAGE_TIMEOUT`
+- `E_DEPENDENCY_MISSING`
+- `E_EXECUTOR_FAILED`
+- `E_STATE_TRANSITION_INVALID`
+
+## Fast Recovery Playbook
+
+1. Re-run in dry simulation (`scripts/simulate_workflow.py`) if issue is orchestration shape-related.
+2. Run plugin/schema validation script for registry/schema drift.
+3. Temporarily switch to `warn_only` policy mode only for triage, not as long-term fix.
+4. Fix root cause in schema/tool output, then restore strict settings.

@@ -1,48 +1,70 @@
 # Migration Guide: Folder Restructure
 
-## Scope
+This guide captures the current folder strategy and how to migrate legacy imports safely.
 
-This guide tracks the phased migration from legacy layer-first paths to the domain-first platform layout.
+## Current Structure (Authoritative)
 
-## Phase 1 (Current): Skeleton + Compatibility
+- `main_app/app` -> runtime/bootstrap/container wiring
+- `main_app/ui` -> tab rendering and interaction state
+- `main_app/services` -> core business logic/orchestration
+- `main_app/platform` -> contracts/config/errors/web sourcing platform features
+- `main_app/infrastructure` -> adapters to external systems (Groq, storage)
+- `main_app/domains` -> domain-first wrappers and extracted domain services
+- `main_app/shared` -> reusable cross-domain helpers
 
-Completed goals:
+## Migration Strategy
 
-1. Added new package skeleton:
-- `main_app/app`
-- `main_app/platform`
-- `main_app/orchestration`
-- `main_app/domains`
-- `main_app/plugins/sdk`
-- `main_app/ui/shell`
-- `main_app/shared`
+### 1) Keep Runtime Stable
 
-2. Introduced compatibility facades:
-- Legacy `main_app/services/agent_dashboard/__init__.py` re-exports orchestration APIs.
-- New wrapper modules map to existing service implementations.
+Do not change `app.py` and `main_app/app/runtime.py` behavior while moving internals.
 
-3. Added architecture check tooling:
-- `scripts/check_import_cycles.py --check-boundaries`
+### 2) Move by Layer, Not by File Name
 
-4. Moved app composition to:
-- `main_app/app/dependency_container.py`
-- `main_app/app/bootstrap.py`
-- `main_app/app/runtime.py`
+When relocating modules:
 
-## Phase 2: Domain Extraction + Import Cleanup
+- UI logic -> `ui`
+- Orchestration logic -> `services/agent_dashboard`
+- External adapters -> `infrastructure`
+- Reusable utility -> `shared`
 
-Planned:
+### 3) Preserve Public Import Points
 
-1. Move implementation files from `main_app/services/*` and `main_app/parsers/*` into `main_app/domains/*`.
-2. Keep old import paths as deprecating shims.
-3. Update plugin discovery paths to prefer `main_app/plugins/tool_plugins` and `main_app/plugins/workflow_plugins`.
-4. Enforce boundary checks for new modules.
+If a move is required, keep compatibility wrappers (re-export imports) until callers are migrated.
 
-## Phase 3: Final Cutover
+### 4) Enforce Boundaries During Migration
 
-Planned:
+Run boundary and cycle checks continuously:
 
-1. Remove deprecated legacy module aliases.
-2. Update scaffold scripts to generate only domain-first paths.
-3. Enable strict architecture boundary enforcement by default.
-4. Freeze ownership and dependency rules in CI.
+```powershell
+python scripts/check_import_cycles.py --package main_app --check-boundaries
+```
+
+### 5) Validate Tool/Workflow Contracts
+
+```powershell
+python scripts/validate_plugin_specs.py
+python scripts/simulate_workflow.py --workflow full_asset_suite --dry
+```
+
+### 6) Finish with Test Pass
+
+```powershell
+python -m pytest -q
+ruff check .
+mypy
+```
+
+## Anti-Patterns to Avoid
+
+- Moving files and silently changing runtime behavior in same commit.
+- Adding UI imports deep inside infrastructure modules.
+- Skipping compatibility wrappers during multi-step migrations.
+- Introducing new asset types without schema + plugin validation updates.
+
+## Definition of Done
+
+- Import cycles: none.
+- Boundary check: clean (or known warnings explicitly documented).
+- Plugin/schema checks: pass.
+- Full tests: pass.
+- Docs updated for new paths.

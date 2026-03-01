@@ -1,32 +1,75 @@
 # Developer Onboarding Fastpath
 
-## Add a New Tool in 10 Steps
+This is the fastest path to become productive in this repository.
 
-1. Scaffold:
-`python scripts/scaffold_tool_plugin.py --intent "my new tool" --kind structured`
-2. Open generated plugin file under:
-`main_app/services/agent_dashboard/executor_plugins/`
-3. Implement executor wiring TODOs.
-4. Adjust produced dependency artifact keys if needed.
-5. Update schema data type/required section if needed.
-6. Optionally scaffold renderer:
-`--with-renderer true`
-7. Validate plugin and schema:
-`python scripts/validate_plugin_specs.py`
-8. Simulate workflow behavior:
-`python scripts/simulate_workflow.py --intents topic,my new tool --dry`
-9. Run fast dev checks:
-`python scripts/dev_checks.py`
-10. Run full tests before PR:
-`python -m pytest tests`
+## 1) Environment Setup
 
-## Common Failures and Fixes
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install --upgrade pip
+pip install -r requirements-dev.txt
+```
 
-1. Missing `execution_spec`:
-- Add full stage/dependency config in plugin spec.
-2. Missing schema file:
-- Ensure `schema_ref.id/version` matches filename in `main_app/schemas/assets`.
-3. Simulation shows blocked node:
-- Check required artifacts are produced by upstream tools.
-4. Schema validation fails at runtime:
-- Align primary section key and data type with schema file.
+Run app:
+
+```powershell
+streamlit run app.py
+```
+
+## 2) Core Navigation
+
+Read these first:
+
+1. `README.md`
+2. `main_app/app/runtime.py`
+3. `main_app/app/dependency_container.py`
+4. `main_app/ui/tabs/main_tabs.py`
+5. `main_app/services/agent_dashboard/*` (if touching orchestration)
+
+## 3) Daily Quality Commands
+
+```powershell
+ruff check .
+mypy
+python -m pytest -q
+```
+
+## 4) Plugin/Workflow Safety Checks
+
+```powershell
+python scripts/validate_plugin_specs.py
+python scripts/simulate_workflow.py --workflow full_asset_suite --dry
+python scripts/check_import_cycles.py --package main_app --check-boundaries
+```
+
+## 5) Web Sourcing Validation
+
+```powershell
+python scripts/benchmark_web_sourcing.py --fixture tests/fixtures/web_queries.json --warn-only
+```
+
+Use `--enforce` in CI-style gating runs.
+
+## 6) Common Workstreams
+
+### Add a New UI Tab
+
+1. Implement tab renderer under `main_app/ui/tabs`.
+2. Register it in `main_app/ui/tabs/main_tabs.py`.
+3. Add required services in `main_app/app/dependency_container.py`.
+4. Add tests under `tests/`.
+
+### Add a New Agent Tool
+
+1. Add/extend executor plugin under `main_app/services/agent_dashboard/executor_plugins`.
+2. Ensure tool is present in `build_default_agent_tool_registry()`.
+3. Add schema under `main_app/schemas/assets`.
+4. Validate with `scripts/validate_plugin_specs.py`.
+5. Add tests for registry + execution + verification.
+
+## 7) Troubleshooting
+
+- `SERPER_API_KEY missing`: switch web provider to `duckduckgo` or set env var.
+- Mongo errors: set `APP_STORE_BACKEND=json` to run local without Mongo.
+- Import cycles: run `scripts/check_import_cycles.py` and fix nearest boundary break first.

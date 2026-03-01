@@ -1,343 +1,128 @@
 # Agent Dashboard Workflows and Tools
 
-## Package Map (Phase 1 Domain-First)
+This file documents the current tool/workflow model used by the Agent Dashboard.
 
-Primary runtime and compatibility namespaces:
+## Tool Inventory (Current)
 
-1. `main_app/orchestration/*`
-- New orchestration-facing namespace (engine, registries, governance, telemetry).
+Default tool intents:
 
-2. `main_app/platform/*`
-- Contracts, runtime config, and error taxonomy facades.
+- `topic`
+- `mindmap`
+- `flashcards`
+- `data table`
+- `quiz`
+- `slideshow`
+- `video`
+- `audio_overview`
+- `report`
 
-3. `main_app/domains/*`
-- Domain-specific service facades per asset.
+Each tool is registered through `build_default_agent_tool_registry()` and includes:
 
-4. `main_app/app/*`
-- Bootstrap and dependency composition container.
+- `plugin_key`
+- `intent`
+- `execution_spec`
+- `schema_ref`
+- capability tags
 
-5. `main_app/services/*`
-- Backward-compatible legacy paths preserved during migration.
+## Workflow Inventory (Current)
 
-## Definitions
+Defined in `build_default_agent_workflow_registry()`:
 
-- `Tool`: a single executable asset capability mapped to one intent and one executor plugin.
-- `Workflow`: a named set of tools plus optional dependency edges for DAG execution.
-- `Tool Execution Spec`: per-tool metadata that drives stage profile, requirement schema key, and artifact dependencies.
-- `tool_stage`: reusable lifecycle stages executed by `AgentToolStageOrchestrator`.
-- `Artifact Envelope`: normalized output contract (`artifact`) attached to every `AgentAssetResult`.
+- `core_learning_assets`
+  - `topic`, `mindmap`, `flashcards`, `quiz`, `slideshow`
+- `media_production_assets`
+  - `slideshow`, `video`, `audio_overview`, `report`
+  - explicit dependency: `video` depends on `slideshow`
+- `full_asset_suite`
+  - all tools in catalog order
 
-## Generic Contracts
+Generated at runtime:
 
-Primary types live in `main_app/contracts.py`:
+- `plan_selected_assets`
+  - built from active plan intent set
+  - dependencies inferred from required/produced artifact keys
 
-1. `AssetSection`
-- `kind`, `key`, `title`, `data`, `mime`, `optional`
+## How Plan -> Execution Works
 
-2. `AssetArtifactEnvelope`
-- `intent`, `title`, `summary`, `sections`, `attachments`, `metrics`, `provenance`
+1. Plan produces selected intents + payloads.
+2. Tool registry resolves tool specs for intents.
+3. Workflow registry builds/loads workflow.
+4. DAG order is resolved (explicit + inferred dependencies).
+5. Each tool executes through the stage orchestrator.
+6. Results are normalized and validated (schema/verify/policy).
+7. Final artifacts are persisted and surfaced in UI/history.
 
-3. `ToolDependencySpec`
-- `requires_artifacts`, `produces_artifacts`, `optional_requires`
+## Stage-Level Execution
 
-4. `ToolExecutionSpec`
-- `intent`, `tool_key`, `stage_profile`, `requirements_schema_key`, `dependency`
+Per tool stage sequence:
 
-`AgentAssetResult` in `main_app/models.py` now includes:
-- `artifact: AssetArtifactEnvelope | None`
-- plus backward-compatible legacy fields (`content`, `audio_bytes`, `parse_note`, `raw_text`, etc.)
+1. validate registration
+2. validate payload requirements
+3. resolve dependencies
+4. execute tool
+5. normalize artifact
+6. validate schema
+7. verify
+8. policy gate
+9. finalize
 
-## Current Tool Inventory
+See `docs/GENERIC_ASSET_ARCHITECTURE.md` for details.
 
-Source of truth:
-- `main_app/services/agent_dashboard/tool_registry.py`
+## Dependency Model
 
-Default tools:
+Tool execution specs contain:
 
-1. `topic`
-2. `mindmap`
-3. `flashcards`
-4. `data table`
-5. `quiz`
-6. `slideshow`
-7. `video`
-8. `audio_overview`
-9. `report`
+- `dependency.requires_artifacts`
+- `dependency.produces_artifacts`
+- `dependency.optional_requires`
 
-Each tool is registered with `execution_spec` that declares:
-- stage profile
-- requirement schema key
-- dependency artifact inputs/outputs
+These drive:
 
-## Current Workflow Inventory
+- DAG ordering
+- runtime dependency blocking/unblocking
+- artifact handoff between tools
 
-Source of truth:
-- `main_app/services/agent_dashboard/workflow_registry.py`
+## Governance Hooks
 
-Default named workflows:
+Integrated gates:
 
-1. `core_learning_assets`
-- tools: `topic`, `mindmap`, `flashcards`, `quiz`, `slideshow`
+- Schema validation (`schema_validation_service.py`)
+- Verification (`verification_service.py`)
+- Policy gate (`policy_gate_service.py`)
 
-2. `media_production_assets`
-- tools: `slideshow`, `video`, `audio_overview`, `report`
-- explicit edge: `slideshow -> video`
+Gate outcomes are attached to artifact provenance and used to decide final stage success/failure.
 
-3. `full_asset_suite`
-- tools: all defaults in intent order
+## Runtime Controls
 
-Runtime workflow:
+Key env controls:
 
-1. `plan_selected_assets`
-- generated from active plan intents
-- dependencies inferred from tool execution specs
-- resolved with DAG topological ordering (catalog order tie-break)
-- optional resume support: `resume_from_run_id`, `resume_from_tool_key`
-
-## Stage Profiles and Lifecycle
-
-Source of truth:
-- `main_app/services/agent_dashboard/tool_stage_service.py`
-
-Current profiles:
-
-1. `default_asset_profile`
-2. `media_asset_profile`
-
-Current stage sequence:
-
-1. `validate_tool_registration`
-2. `validate_stage_requirements`
-3. `resolve_dependencies`
-4. `execute_tool`
-5. `normalize_artifact`
-6. `validate_schema`
-7. `verify_result`
-8. `policy_gate_result`
-9. `finalize_result`
-
-Requirement coverage:
-- every stage has at least one requirement check
-- dependency stage enforces required artifact inputs
-- normalization stage ensures every result has artifact envelope
-- verify stage enforces strict output quality and shape checks
-
-## Artifact Dependency Defaults
-
-Source of truth:
-- `main_app/services/agent_dashboard/artifact_adapter.py`
-
-Produced artifacts by tool:
-
-1. `topic` -> `artifact.topic.text`
-2. `mindmap` -> `artifact.mindmap.tree`
-3. `flashcards` -> `artifact.flashcards.cards`
-4. `data table` -> `artifact.table.data`
-5. `quiz` -> `artifact.quiz.data`
-6. `slideshow` -> `artifact.slideshow.slides`
-7. `video` -> `artifact.video.payload`, `artifact.video.audio`
-8. `audio_overview` -> `artifact.audio_overview.payload`, `artifact.audio_overview.audio`
-9. `report` -> `artifact.report.text`
-
-Required dependency example:
-- `video` requires `artifact.slideshow.slides`
-
-## Single Point Result Handling
-
-Source of truth:
-- `main_app/services/agent_dashboard/executor_plugins/parsed_asset_result.py`
-
-Shared handlers:
-
-1. `build_artifact_result(...)`
-2. `build_error_asset_result(...)`
-3. `build_content_asset_result(...)`
-4. `build_media_asset_result(...)`
-5. `build_parsed_asset_result(...)`
-
-Behavior:
-- all executor plugins return through shared handlers
-- shared handler constructs `AgentAssetResult`
-- shared handler attaches normalized `artifact` envelope
-
-## Verification and Errors
-
-Source of truth:
-- `main_app/services/agent_dashboard/verification_service.py`
-- `main_app/services/agent_dashboard/error_codes.py`
-
-Verification profiles:
-1. `text_asset_verify`
-2. `structured_asset_verify`
-3. `media_asset_verify`
-
-Strict verification policy:
-- verification runs after artifact normalization
-- any verification `error` fails the asset (`status=error`)
-- failed assets do not publish dependency artifacts
-- unknown verify profile creates warning issue and falls back safely
-
-Standard error codes:
-- `E_TOOL_NOT_REGISTERED`
-- `E_PAYLOAD_MISSING_MANDATORY`
-- `E_DEPENDENCY_MISSING`
-- `E_EXECUTOR_FAILED`
-- `E_ARTIFACT_NORMALIZATION_FAILED`
-- `E_VERIFY_FAILED`
-- `E_WORKFLOW_CYCLE`
-- `E_STAGE_TIMEOUT`
-- `E_STAGE_EXCEPTION`
-- `E_VERIFY_PROFILE_UNKNOWN`
-- `E_ARTIFACT_SCHEMA_MISMATCH`
-- `E_SCHEMA_VALIDATION_FAILED`
-- `E_PLUGIN_SPEC_INVALID`
-- `E_STATE_TRANSITION_INVALID`
-
-Runtime invariants:
-1. Each stage emits timing (`started_at`, `ended_at`, `duration_ms`) and status.
-2. Artifact metrics include:
-- `stage_durations_ms`
-- `attempt_durations_ms`
-- `total_duration_ms`
-- `retry_count`
-- `verification_issue_count`
-- `queue_wait_ms`
-- `policy_enforced`
-3. Every stage failure contains structured error section with `code`, `stage`, `message`, and `details`.
-
-## Execution Flow (Generic)
-
-1. Resolve tools from plan intents
-2. Build runtime workflow (`plan_selected_assets`)
-3. Resolve DAG order + detect cycles
-4. Execute stage lifecycle per tool
-5. Verify each result (`verify_result`)
-6. Validate schema contracts (`validate_schema`)
-7. Apply governance checks (`policy_gate_result`)
-8. Collect produced artifacts only from verified/policy-passed tools
-9. Continue independent tools even if one branch fails
-10. Return ordered `AgentAssetResult` list
-
-## Simulation Mode
-
-- `AgentDashboardAssetService.simulate_plan_execution(...)` provides a no-side-effect plan simulation.
-- Simulation returns:
-  - planned DAG order
-  - expected stage sequence per tool
-  - planned state path (`pending -> ready -> running -> completed/blocked`)
-  - dependency block hints
-- Simulation does not execute tool executors and does not mutate run/stage ledgers.
-
-## Per-Asset Plan / Execute / Verify
-
-1. `topic`
-- Plan: require `topic`
-- Execute: generate explainer text
-- Verify: `artifact.topic.text` exists and text length is meaningful
-
-2. `mindmap`
-- Plan: require `topic`
-- Execute: generate parsed map tree
-- Verify: root node has `name`, structure is valid tree
-
-3. `flashcards`
-- Plan: require `topic`
-- Execute: generate cards payload
-- Verify: cards exist and include `question` + `short_answer`
-
-4. `data table`
-- Plan: require `topic`
-- Execute: generate table payload
-- Verify: columns and rows are present and consistent
-
-5. `quiz`
-- Plan: require `topic`
-- Execute: generate quiz payload
-- Verify: questions exist, option counts are valid, answer index fits bounds
-
-6. `slideshow`
-- Plan: require `topic`
-- Execute: generate slides
-- Verify: non-empty slide list and slide content fields present
-
-7. `video`
-- Plan: require `topic` and slideshow dependency artifact
-- Execute: generate video payload + audio
-- Verify: payload/slides/scripts are present and audio output is represented
-
-8. `audio_overview`
-- Plan: require `topic`
-- Execute: generate dialogue payload + audio
-- Verify: dialogue turns exist and audio output is represented
-
-9. `report`
-- Plan: require `topic`
-- Execute: generate report markdown/text
-- Verify: primary report text section exists and is non-empty
-
-## Backward Compatibility
-
-1. Legacy fields in `AgentAssetResult` remain available
-2. `legacy_result_to_artifact(...)` adapts old-shaped results to envelope
-3. UI default/fallback renderers read artifact sections when present, else legacy payload
-4. No destructive migration for stored history
-
-## Feature Flag
-
-- `USE_GENERIC_ASSET_FLOW`
-- default: enabled
-- values `0/false/no/off` switch to linear compatibility path
-- `ENABLE_VERIFY_STAGE`
-- default: enabled
-- values `0/false/no/off` skip verification stage
-- `ENABLE_PARALLEL_DAG`
 - `MAX_PARALLEL_TOOLS`
+- `ENABLE_PARALLEL_DAG`
+- `WORKFLOW_FAIL_POLICY`
+- `ENABLE_VERIFY_STAGE`
 - `ENABLE_POLICY_GATE`
-- `POLICY_GATE_MODE` (`strict` or `warn_only`)
+- `POLICY_GATE_MODE`
 - `SCHEMA_VALIDATE_ENFORCE`
 
-## How to Add a New Tool
+## Common Developer Tasks
 
-1. Add intent requirement spec and optional metadata in:
-- `main_app/services/intent/intent_requirement_spec.py`
+### Add New Tool
 
-2. Register tool in:
-- `main_app/services/agent_dashboard/tool_registry.py`
-- include `execution_spec` with stage profile + dependencies
+1. Add executor implementation/plugin.
+2. Add tool definition to default tool registry.
+3. Add schema JSON (`main_app/schemas/assets`).
+4. Add tests + run plugin validation script.
 
-3. Add executor plugin in:
-- `main_app/services/agent_dashboard/executor_plugins/<tool>.py`
-- return with shared handler `build_artifact_result(...)` or wrappers
+### Add New Workflow
 
-4. Optional UI enhancers:
-- agent dashboard renderer plugin
-- asset history renderer plugin
+1. Register workflow in workflow registry.
+2. Define `tool_keys` and optional `tool_dependencies`.
+3. Dry run simulation script and add tests.
 
-5. Add/extend tests:
-- tool metadata
-- workflow DAG behavior
-- stage orchestration
-- plugin artifact output
+## Validation Commands
 
-## How to Create/Modify Workflows
-
-1. Add/update `AgentWorkflowDefinition` in:
-- `main_app/services/agent_dashboard/workflow_registry.py`
-
-2. Set:
-- `tool_keys` in preferred order
-- `tool_dependencies` for explicit edges
-
-3. Validate with DAG resolver tests.
-
-## Key Files
-
-- `main_app/contracts.py`
-- `main_app/models.py`
-- `main_app/services/agent_dashboard/artifact_adapter.py`
-- `main_app/services/agent_dashboard/tool_registry.py`
-- `main_app/services/agent_dashboard/workflow_registry.py`
-- `main_app/services/agent_dashboard/tool_stage_service.py`
-- `main_app/services/agent_dashboard/asset_service.py`
-- `main_app/services/agent_dashboard/executor_plugins/parsed_asset_result.py`
-- `docs/GENERIC_ASSET_ARCHITECTURE.md`
+```powershell
+python scripts/validate_plugin_specs.py
+python scripts/simulate_workflow.py --workflow full_asset_suite --dry
+python -m pytest -q tests/test_tool_registry.py tests/test_workflow_registry.py tests/test_tool_stage_service.py
+```

@@ -1,220 +1,135 @@
 # Video Asset Creation End-to-End Summary
 
+This document explains the current video generation pipeline from UI request to final MP4/audio outputs.
+
 ## Scope
-This document summarizes how a `video` asset is created in this project, from user input to final outputs (payload, audio, and MP4), including both:
 
-- Video Builder tab flow (direct UI path)
-- Agent Dashboard workflow flow (DAG + stage orchestration path)
+Two video paths are covered:
 
-## Primary Entry Points
-- UI runtime: `app.py`, `main_app/app/runtime.py`
-- Video tab UI: `main_app/ui/tabs/video_tab.py`
-- Core video generation service: `main_app/services/video_asset_service.py`
-- Audio synthesis service: `main_app/services/audio_overview_service.py`
-- MP4 rendering service: `main_app/services/video_export_service.py`
-- Agent executor plugin: `main_app/services/agent_dashboard/executor_plugins/video.py`
-- Agent stage orchestration: `main_app/services/agent_dashboard/tool_stage_service.py`
+1. Direct **Video Builder** tab flow
+2. Agent Dashboard tool/workflow flow for `video` intent
 
-## Dependency Wiring
-`main_app/app/dependency_container.py` composes the video stack:
+## Key Entry Points
 
-1. `SlideShowService` for slide generation
-2. `AudioOverviewParser` for script parsing/repair
-3. `AudioOverviewService` for MP3 synthesis
-4. `VideoAssetService` that orchestrates slideshow + script generation + audio prep
-5. `VideoExportService` for final MP4 rendering
+- UI tab: `main_app/ui/tabs/video_tab.py`
+- Video generation: `main_app/services/video_asset_service.py`
+- Video rendering/export: `main_app/services/video_export_service.py`
+- Agent execution: `main_app/services/agent_dashboard/*`
 
-## A) Video Builder Tab Flow (Direct UI Path)
-Defined in `main_app/ui/tabs/video_tab.py`.
+## A) Direct UI Path (Video Builder Tab)
 
-### 1. Input collection
-The tab collects:
+### 1) User Input
 
-- Topic, constraints
-- Subtopic/slide counts
-- Code mode and representation mode
-- Speaker count and conversation style
-- Audio language + slow mode
-- Video template + animation style
-- YouTube-style narration prompt toggle
+Collected in `render_video_tab(...)`:
 
-### 2. Background job submission
-When user clicks `Generate Video Asset`:
+- topic + optional constraints
+- subtopic count and slides per subtopic
+- animation style
+- implicit defaults for code mode, template, speaker count, representation mode
 
-- A background job is submitted via `BackgroundJobManager`.
-- Worker stages:
-  1. `video_service.generate(...)`
-  2. `video_service.synthesize_audio(...)` if payload generation succeeds
-  3. `video_exporter.build_video_mp4(...)` if audio exists
+### 2) Background Job Submission
 
-This keeps the UI responsive and supports progress updates/cancel flow.
+Tab submits a background worker via `BackgroundJobManager`:
 
-### 3. Video payload generation (`VideoAssetService.generate`)
-`main_app/services/video_asset_service.py`
+1. generate slideshow + narration scripts
+2. synthesize combined narration audio
+3. render MP4 (if audio exists)
 
-#### 3.1 Slideshow stage
-Calls `SlideShowService.generate(...)` first:
+### 3) Video Payload Generation (`VideoAssetService.generate`)
 
-- Builds slideshow outline via LLM
-- Builds section slides via LLM
-- Normalizes slide representations/layout payload
-- Adds intro + summary slides
-- Returns `slides` or parse error
+Pipeline:
 
-If slideshow fails, video generation exits early with:
-- `parse_error = "Slideshow stage failed: ..."`
+1. Calls `SlideShowService.generate(...)`.
+2. For each slide, calls LLM for slide dialogue JSON.
+3. Parses each dialogue with `AudioOverviewParser`.
+4. Normalizes speaker turns, trims invalid text, estimates duration.
+5. Assembles final `video_payload`:
+   - slides
+   - speaker roster
+   - slide scripts
+   - metadata (template/style/mode flags)
 
-#### 3.2 Per-slide narration script stage
-For each slide:
+If any slide script fails parsing, generation aborts with structured parse error.
 
-- Calls LLM task `video_slide_script` with strict JSON schema
-- Parses with `AudioOverviewParser.parse(...)`
-  - direct JSON parse
-  - local JSON repair fallback
-  - optional LLM JSON repair fallback
-- Normalizes dialogue:
-  - speaker canonicalization to roster
-  - removes prefixes like `Ava:`
-  - sanitizes/truncates overly long turns
-  - estimates duration per slide
+### 4) Audio Synthesis (`VideoAssetService.synthesize_audio`)
 
-If any slide script fails parse/normalization, generation exits with a slide-specific error.
+Builds dialogue payload and delegates to `AudioOverviewService.synthesize_mp3(...)`.
 
-#### 3.3 Payload assembly
-On success, returns `VideoGenerationResult.video_payload` with:
+Outputs:
 
-- `topic`, `title`
-- `slides`
-- `speaker_roster`
-- `slide_scripts`
-- `conversation_style`
-- `video_template`, `animation_style`, `representation_mode`
-- metadata (`total_slides`, `speaker_count`, `code_mode`, etc.)
+- `audio_bytes` on success
+- error string on failure
 
-History is recorded through `AssetHistoryService` when enabled.
+### 5) MP4 Rendering (`VideoExportService.build_video_mp4`)
 
-### 4. Audio synthesis (`VideoAssetService.synthesize_audio`)
-`main_app/services/video_asset_service.py`
+Flow:
 
-- Flattens all slide dialogue turns into one ordered dialogue stream.
-- Delegates to `AudioOverviewService.synthesize_mp3(...)`.
+1. Validates slides + audio input
+2. Creates temporary render workspace
+3. Renders slide PNG frames (supports multiple representation layouts)
+4. Applies motion profile (`none`, `smooth`, `youtube_dynamic`)
+5. Stitches clips + narration audio with MoviePy
+6. Returns MP4 bytes
 
-`main_app/services/audio_overview_service.py` synthesis strategy:
+## B) Agent Dashboard Path
 
-1. Try multi-voice `edge_tts` by speaker-to-voice mapping (language-aware voice pools).
-2. If unavailable/fails, fallback to `gTTS` single-voice MP3.
+When `video` runs through the generic asset flow:
 
-Returns:
-- `audio_bytes` (if successful)
-- optional warning/error string
+1. Tool resolved from `AgentToolRegistry`
+2. Workflow DAG order resolved by `AgentWorkflowRegistry`
+3. Stage orchestrator executes `video` through standard stages:
+   - validate registration
+   - validate payload requirements
+   - resolve dependencies
+   - execute tool
+   - normalize artifact
+   - validate schema
+   - verify result
+   - policy gate
+   - finalize
 
-### 5. MP4 rendering (`VideoExportService.build_video_mp4`)
-`main_app/services/video_export_service.py`
+Default workflow dependency for media pipeline:
 
-Preconditions:
+- `video` depends on `slideshow` in `media_production_assets`
 
-- `audio_bytes` must exist
-- `video_payload.slides` must be non-empty
-- `moviepy` and `Pillow` must be installed
+## Artifact Contract
 
-Render flow:
+Primary video section key:
 
-1. Resolve template (`standard` / `youtube`) and animation style (`none` / `smooth` / `youtube_dynamic`).
-2. Create temp render workspace.
-3. Write narration MP3 and load audio duration.
-4. Compute per-slide durations (using script hints, scaled to total audio duration).
-5. Render slide images (gradient theme, title/body/code blocks, representation-aware layouts).
-6. Build visual clips:
-   - Progressive reveal only for supported representations when `youtube_dynamic`.
-   - Motion effects (Ken Burns style zoom/crop) for non-`none` animation.
-7. Concatenate clips, apply crossfade transitions, attach audio.
-8. Export `libx264` + `aac` MP4 and return bytes.
-9. Close clips and cleanup temp workspace.
+- `artifact.video.payload` (object)
 
-## B) Agent Dashboard Workflow Flow (DAG Path)
+Schema:
 
-## 1. Tool and workflow registration
-`main_app/services/agent_dashboard/tool_registry.py` and `workflow_registry.py`:
+- `main_app/schemas/assets/video.v1.json`
 
-- `video` tool default dependency:
-  - requires: `artifact.slideshow.slides`
-  - produces: `artifact.video.payload`, `artifact.video.audio`
+Verification checks include:
 
-Default media workflow includes explicit dependency `slideshow -> video`.
+- payload presence
+- slide/script presence
+- audio artifact consistency
 
-## 2. Executor behavior
-`main_app/services/agent_dashboard/executor_plugins/video.py`:
+## Storage and History
 
-1. Calls `video_service.generate(...)`
-2. Calls `video_service.synthesize_audio(...)`
-3. Returns media asset result with payload + audio bytes/error
+- Generation history is persisted via `AssetHistoryService`.
+- Background job status is tracked in session state.
+- Agent path additionally records stage diagnostics/run diagnostics.
 
-## 3. Stage orchestration and gating
-`main_app/services/agent_dashboard/tool_stage_service.py`
+## Common Failure Modes
 
-Stage sequence:
+1. Missing Groq config in sidebar
+2. Slideshow generation failure cascades into video failure
+3. Slide script JSON parse failure
+4. Audio synthesis failure (TTS/provider/runtime)
+5. MP4 render dependency missing (`moviepy`/`Pillow`/FFmpeg)
 
-1. `validate_tool_registration`
-2. `validate_stage_requirements`
-3. `resolve_dependencies`
-4. `execute_tool`
-5. `normalize_artifact`
-6. `validate_schema`
-7. `verify_result`
-8. `policy_gate_result`
-9. `finalize_result`
+## Minimal Validation Set
 
-Dependency enforcement:
+```powershell
+python -m pytest -q tests/test_video_asset_service.py tests/test_video_export_service.py tests/test_video_tab.py
+```
 
-- `resolve_dependencies` fails with `Missing required dependency artifacts: ...` when required artifacts are absent.
+For workflow-level checks:
 
-For video, this means slideshow artifacts must exist and be publishable.
-
-## 4. Verification checks for video
-`main_app/services/agent_dashboard/verification_service.py` verifies:
-
-- `artifact.video.payload` exists
-- payload has non-empty `slides`
-- payload has non-empty `slide_scripts`
-- audio artifact exists (attachment or `audio_bytes`/`audio_error`)
-
-If verification fails for upstream slideshow, video dependency can be blocked in the same run.
-
-## Outputs and Artifacts
-
-## Direct tab/session outputs
-- `video_payload` dict in session state
-- `video_audio_bytes` / `video_audio_error`
-- `video_full_video_bytes` / `video_full_video_error`
-
-User can download:
-- script markdown
-- payload JSON
-- MP3
-- MP4
-
-## Agent artifact outputs
-- `artifact.video.payload`
-- `artifact.video.audio`
-
-Schema contract:
-- `main_app/schemas/assets/video.v1.json` requires `artifact.video.payload` as object.
-
-## Known Failure Modes
-
-- Missing API key/model in UI settings
-- Slideshow parse failure (video generation stops)
-- Slide narration parse failure on any slide
-- No dialogue extracted for audio synthesis
-- Missing TTS dependencies (`edge_tts`/`gTTS`)
-- Missing rendering dependencies (`moviepy`/`Pillow`)
-- Missing required dependency artifacts in agent DAG flow
-- Verification/policy/schema failures preventing artifact publication
-
-## Test Coverage Pointers
-- Video generation + normalization + youtube prompt behavior:
-  - `tests/test_video_asset_service.py`
-- MP4 export guardrails and duration/template logic:
-  - `tests/test_video_export_service.py`
-- Dependency chain blocking when slideshow verification fails:
-  - `tests/test_integration_full_flows.py` (`test_verify_failure_blocks_dependency_chain`)
+```powershell
+python scripts/simulate_workflow.py --workflow media_production_assets --dry
+```

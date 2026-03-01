@@ -1,58 +1,69 @@
-# Architecture Boundaries (Phase 1)
+# Architecture Boundaries
 
-This document defines package-level dependency direction for the domain-first layout.
+This document describes the current import boundary policy enforced by `scripts/check_import_cycles.py`.
 
-## Layers
+## Why This Exists
 
-1. `main_app/app`
-- Composition root and runtime bootstrap.
-- Can depend on all runtime layers.
+The codebase has grown into multiple layers (`ui`, `services`, `platform`, `infrastructure`, `domains`, `orchestration`, etc.).  
+Boundary checks prevent accidental tight coupling and keep refactors manageable.
 
-2. `main_app/ui`
-- Rendering and interaction only.
-- Must not be imported by `domains`, `orchestration`, or `platform`.
+## Layer Rules
 
-3. `main_app/domains`
-- Asset-specific behavior (topic, quiz, slideshow, video, etc).
-- Must not import `ui`.
+Current allowed dependency map (from `scripts/check_import_cycles.py`):
 
-4. `main_app/orchestration`
-- Cross-asset workflow execution, stage lifecycle, and governance.
-- Must not import tab or renderer modules from `ui`.
+- `app` -> `platform`, `orchestration`, `domains`, `ui`, `shared`, `plugins`, `infrastructure`, `services`
+- `ui` -> `platform`, `orchestration`, `domains`, `shared`, `services`
+- `orchestration` -> `platform`, `shared`, `plugins`, `services`
+- `domains` -> `platform`, `shared`, `services`
+- `platform` -> `shared`, `services`
+- `plugins` -> `platform`, `orchestration`, `shared`, `services`
+- `shared` -> `platform`, `services`
+- `infrastructure` -> `platform`, `shared`, `services`
+- `services` -> `platform`, `shared`, `plugins`, `infrastructure`, `orchestration`, `domains`
+- `parsers` -> `platform`, `shared`, `services`
+- `mindmap` -> `platform`, `shared`, `services`
+- `schemas` -> `platform`, `shared`, `services`
 
-5. `main_app/platform`
-- Contracts, config, error taxonomy, storage abstractions.
-- No dependency on `ui`.
+Always-allowed roots:
 
-6. `main_app/shared`
-- Cross-cutting helpers and utilities.
-- No dependency on `ui`.
+- `main_app.constants`
+- `main_app.contracts`
+- `main_app.models`
 
-## Compatibility Policy
+## What Is Checked
 
-Phase 1 keeps legacy imports operational through shims:
+The script validates:
 
-- `main_app/services/agent_dashboard/*` remains source-compatible.
-- New modules are introduced under:
-  - `main_app/orchestration/*`
-  - `main_app/platform/*`
-  - `main_app/domains/*`
-  - `main_app/plugins/sdk/*`
-  - `main_app/ui/shell/*`
-  - `main_app/shared/*`
+1. Import cycles across discovered modules
+2. Layer boundary violations against the allow-list above
 
-## Boundary Enforcement
+## Commands
 
-Use:
+Warning mode for boundaries:
 
-```bash
+```powershell
 python scripts/check_import_cycles.py --package main_app --check-boundaries
 ```
 
-For strict enforcement:
+Fail on boundaries:
 
-```bash
+```powershell
 python scripts/check_import_cycles.py --package main_app --check-boundaries --enforce-boundaries
 ```
 
-Default CI mode in Phase 1 is warning-only for boundary violations.
+## CI Behavior
+
+CI currently runs:
+
+```powershell
+python scripts/check_import_cycles.py --package main_app --check-boundaries
+```
+
+Cycle issues fail CI. Boundary issues are reported and can be moved to strict mode by adding `--enforce-boundaries`.
+
+## Practical Guidance
+
+- Keep UI-specific logic in `main_app/ui`.
+- Keep external API/storage adapters in `main_app/infrastructure`.
+- Keep cross-cutting reusable logic in `main_app/shared`.
+- Add new domain behavior through `services` + `domains` instead of importing deep UI internals.
