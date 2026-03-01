@@ -4,8 +4,9 @@ from typing import Any
 
 import streamlit as st
 
-from main_app.models import GroqSettings
+from main_app.models import GroqSettings, WebSourcingSettings
 from main_app.services.cached_llm_service import CachedLLMService
+from main_app.services.global_grounding_service import GlobalGroundingService
 from main_app.services.quiz_exporter import QuizExporter
 from main_app.services.quiz_service import QuizService
 from main_app.services.source_grounding_service import SourceGroundingService
@@ -127,8 +128,10 @@ def render_quiz_tab(
     quiz_exporter: QuizExporter,
     llm_service: CachedLLMService,
     settings: GroqSettings,
+    web_sourcing_settings: WebSourcingSettings,
     cache_count_placeholder: Any,
     source_grounding_service: SourceGroundingService,
+    global_grounding_service: GlobalGroundingService,
 ) -> None:
     def _activate_quiz(topic_text: str, questions_payload: list[dict[str, Any]]) -> None:
         st.session_state.quiz_topic = topic_text.strip()
@@ -201,6 +204,10 @@ def render_quiz_tab(
         grounding = render_source_grounding_controls(
             key_prefix="quiz",
             source_grounding_service=source_grounding_service,
+            global_grounding_service=global_grounding_service,
+            web_settings=web_sourcing_settings,
+            topic=topic,
+            constraints=constraints,
         )
 
     with control_col:
@@ -237,7 +244,11 @@ def render_quiz_tab(
             st.error("Please enter a topic.")
             st.stop()
         if grounding.enabled and not grounding.grounding_context:
-            st.error("Source-grounded mode is enabled but no valid source text was loaded.")
+            strict_warning = next(
+                (item for item in grounding.warnings if "Strict mode is enabled" in str(item)),
+                "",
+            )
+            st.error(strict_warning or "Source-grounded mode is enabled but no valid source text was loaded.")
             st.stop()
 
         try:
@@ -250,6 +261,7 @@ def render_quiz_tab(
                     grounding_context=grounding.grounding_context,
                     source_manifest=grounding.source_manifest,
                     require_citations=grounding.require_citations,
+                    grounding_metadata=grounding.diagnostics,
                     settings=settings,
                 )
 

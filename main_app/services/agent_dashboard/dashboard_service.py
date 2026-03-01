@@ -7,6 +7,7 @@ from main_app.services.agent_dashboard.asset_executor_registry import (
     build_default_asset_executor_registry,
 )
 from main_app.services.agent_dashboard.asset_service import AgentDashboardAssetService
+from main_app.services.agent_dashboard.executor_types import AssetExecutionRuntimeContext
 from main_app.services.agent_dashboard.conversation_service import AgentDashboardConversationService
 from main_app.services.agent_dashboard.planner_service import AgentDashboardPlannerService
 from main_app.services.audio_overview_service import AudioOverviewService
@@ -137,10 +138,12 @@ class AgentDashboardService:
         *,
         plan: AgentPlan,
         settings: GroqSettings,
+        runtime_context: AssetExecutionRuntimeContext | None = None,
     ) -> tuple[list[AgentAssetResult], list[str]]:
         return self._assets.generate_assets_from_plan(
             plan=plan,
             settings=settings,
+            runtime_context=runtime_context,
         )
 
     def explain_mindmap_node(

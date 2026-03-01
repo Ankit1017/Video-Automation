@@ -34,6 +34,12 @@ class SourceDocument:
     text: str
     char_count: int
     truncated: bool
+    source_type: str = "upload"
+    uri: str = ""
+    provider: str = ""
+    query: str = ""
+    retrieved_at: str = ""
+    quality_score: float = 0.0
 
 
 class SourceGroundingService:
@@ -145,6 +151,12 @@ class SourceGroundingService:
                     "name": source.name,
                     "char_count": source.char_count,
                     "truncated": source.truncated,
+                    "source_type": source.source_type,
+                    "uri": source.uri,
+                    "provider": source.provider,
+                    "query": source.query,
+                    "retrieved_at": source.retrieved_at,
+                    "quality_score": source.quality_score,
                 }
             )
         return manifest

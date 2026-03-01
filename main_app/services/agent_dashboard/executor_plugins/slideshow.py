@@ -4,6 +4,7 @@ from main_app.contracts import IntentPayload
 from main_app.models import AgentAssetResult, GroqSettings
 from main_app.services.agent_dashboard.executor_types import (
     AssetExecutor,
+    AssetExecutionRuntimeContext,
     AssetExecutorPlugin,
     AssetExecutorPluginContext,
 )
@@ -14,7 +15,11 @@ from main_app.services.agent_dashboard.executor_plugins.parsed_asset_result impo
 
 
 def _build_executor(context: AssetExecutorPluginContext) -> AssetExecutor:
-    def _execute(payload: IntentPayload, settings: GroqSettings) -> AgentAssetResult:
+    def _execute(
+        payload: IntentPayload,
+        settings: GroqSettings,
+        runtime_context: AssetExecutionRuntimeContext,
+    ) -> AgentAssetResult:
         topic = str(payload.get("topic", ""))
         result = context.slideshow_service.generate(
             topic=topic,
@@ -23,6 +28,10 @@ def _build_executor(context: AssetExecutorPluginContext) -> AssetExecutor:
             slides_per_subtopic=int(payload.get("slides_per_subtopic", 2)),
             code_mode=str(payload.get("code_mode", "auto")),
             representation_mode=str(payload.get("representation_mode", "auto")),
+            grounding_context=runtime_context.grounding_context,
+            source_manifest=list(runtime_context.source_manifest),
+            require_citations=bool(runtime_context.require_citations),
+            grounding_metadata=dict(runtime_context.diagnostics),
             settings=settings,
         )
         if result.parse_error or not result.slides:

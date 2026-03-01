@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import inspect
 from typing import Iterable
 
 from main_app.contracts import IntentPayload
 from main_app.models import AgentAssetResult, GroqSettings
 from main_app.services.agent_dashboard.executor_types import (
     AssetExecutor,
+    AssetExecutionRuntimeContext,
     AssetExecutorRegistration,
 )
 from main_app.services.audio_overview_service import AudioOverviewService
@@ -43,6 +45,7 @@ class AgentAssetExecutorRegistry:
         intent: str,
         payload: IntentPayload,
         settings: GroqSettings,
+        runtime_context: AssetExecutionRuntimeContext | None = None,
     ) -> AgentAssetResult:
         normalized_intent = " ".join(str(intent).strip().split()).lower()
         executor = self._executors.get(normalized_intent)
@@ -55,7 +58,11 @@ class AgentAssetExecutorRegistry:
             )
 
         try:
-            result = executor(payload, settings)
+            effective_runtime = runtime_context or AssetExecutionRuntimeContext()
+            if _executor_accepts_runtime_context(executor):
+                result = executor(payload, settings, effective_runtime)
+            else:
+                result = executor(payload, settings)  # type: ignore[misc]
             if not result.intent:
                 result.intent = intent
             if not result.payload:
@@ -68,6 +75,17 @@ class AgentAssetExecutorRegistry:
                 error=f"Generation failed: {exc}",
                 payload=payload,
             )
+
+
+def _executor_accepts_runtime_context(executor: AssetExecutor) -> bool:
+    try:
+        signature = inspect.signature(executor)
+    except (TypeError, ValueError):
+        return True
+    params = list(signature.parameters.values())
+    if any(param.kind == inspect.Parameter.VAR_POSITIONAL for param in params):
+        return True
+    return len(params) >= 3
 
 
 def build_default_asset_executor_registry(

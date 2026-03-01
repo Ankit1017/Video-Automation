@@ -11,7 +11,7 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["E9", "F"]
+select = ["E9", "F", "B"]
 ignore = []
 
 [tool.ruff.lint.per-file-ignores]
@@ -28,5 +28,7 @@ files = [
   "main_app/constants.py",
   "main_app/services/agent_dashboard/intent_catalog.py",
   "main_app/services/agent_dashboard/asset_executor_registry.py",
+  "main_app/services/global_grounding_service.py",
+  "main_app/platform/web_sourcing",
   "scripts/check_import_cycles.py",
 ]

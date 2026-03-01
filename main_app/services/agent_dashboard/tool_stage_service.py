@@ -14,6 +14,7 @@ from main_app.services.agent_dashboard.artifact_adapter import (
     required_artifacts,
 )
 from main_app.services.agent_dashboard.asset_executor_registry import AgentAssetExecutorRegistry
+from main_app.services.agent_dashboard.executor_types import AssetExecutionRuntimeContext
 from main_app.services.agent_dashboard.error_codes import (
     E_ARTIFACT_NORMALIZATION_FAILED,
     E_DEPENDENCY_MISSING,
@@ -103,6 +104,7 @@ class ToolStageContext:
     settings: GroqSettings
     intent_router: IntentRouterService
     executor_registry: AgentAssetExecutorRegistry
+    runtime_context: AssetExecutionRuntimeContext
     available_artifacts: ArtifactMap
     validated_tool: bool = False
     payload_valid: bool = False
@@ -377,6 +379,7 @@ class AgentToolStageOrchestrator:
         tool: AgentToolDefinition,
         payload: IntentPayload,
         settings: GroqSettings,
+        runtime_context: AssetExecutionRuntimeContext | None = None,
         intent_router: IntentRouterService,
         executor_registry: AgentAssetExecutorRegistry,
         available_artifacts: ArtifactMap | None = None,
@@ -393,6 +396,7 @@ class AgentToolStageOrchestrator:
             tool=tool,
             payload=payload,
             settings=settings,
+            runtime_context=runtime_context or AssetExecutionRuntimeContext(),
             intent_router=intent_router,
             executor_registry=executor_registry,
             available_artifacts=dict(available_artifacts or {}),
@@ -680,6 +684,7 @@ class AgentToolStageOrchestrator:
             intent=context.tool.intent,
             payload=context.payload,
             settings=context.settings,
+            runtime_context=context.runtime_context,
         )
         context.asset_result = result
         if result.status == "success":

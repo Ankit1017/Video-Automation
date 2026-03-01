@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 from main_app.contracts import IntentPayload
@@ -16,7 +16,15 @@ from main_app.domains.topic.services.topic_explainer_service import TopicExplain
 from main_app.services.video_asset_service import VideoAssetService
 
 
-AssetExecutor = Callable[[IntentPayload, GroqSettings], AgentAssetResult]
+@dataclass(frozen=True)
+class AssetExecutionRuntimeContext:
+    grounding_context: str = ""
+    source_manifest: list[dict[str, object]] = field(default_factory=list)
+    require_citations: bool = False
+    diagnostics: dict[str, object] = field(default_factory=dict)
+
+
+AssetExecutor = Callable[[IntentPayload, GroqSettings, AssetExecutionRuntimeContext], AgentAssetResult]
 
 
 @dataclass(frozen=True)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from main_app.services.pptx_export.design_tokens import apply_design_tokens
 from main_app.services.pptx_export.models import PptxTemplateStyle
 from main_app.services.pptx_export.pdf_builder import PdfDeckBuilder
 from main_app.services.pptx_export.pptx_builder import PptxDeckBuilder
@@ -28,7 +29,7 @@ class PptxExportService:
         template_key: str,
     ) -> tuple[bytes | None, str | None]:
         try:
-            style = self._resolve_template(template_key)
+            style = apply_design_tokens(self._resolve_template(template_key))
             builder = PptxDeckBuilder(style=style)
             return builder.build(topic=topic, slides=slides)
         except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
@@ -42,7 +43,7 @@ class PptxExportService:
         template_key: str,
     ) -> tuple[bytes | None, str | None]:
         try:
-            style = self._resolve_template(template_key)
+            style = apply_design_tokens(self._resolve_template(template_key))
             builder = PdfDeckBuilder(style=style)
             return builder.build(topic=topic, slides=slides)
         except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:

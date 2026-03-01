@@ -22,6 +22,7 @@ from main_app.contracts import (
 from main_app.models import AgentAssetResult, AgentPlan, GroqSettings
 from main_app.services.agent_dashboard.artifact_adapter import collect_produced_artifacts
 from main_app.services.agent_dashboard.asset_executor_registry import AgentAssetExecutorRegistry
+from main_app.services.agent_dashboard.executor_types import AssetExecutionRuntimeContext
 from main_app.services.agent_dashboard.error_codes import (
     E_DEDUP_SIGNATURE_INVALID,
     E_PARALLEL_SCHEDULER_FAILURE,
@@ -103,6 +104,7 @@ class AgentDashboardAssetService:
         *,
         plan: AgentPlan,
         settings: GroqSettings,
+        runtime_context: AssetExecutionRuntimeContext | None = None,
         run_id: str | None = None,
         on_stage_event: Callable[[StageDiagnostic], None] | None = None,
         on_run_event: Callable[[RunLedgerRecord], None] | None = None,
@@ -113,6 +115,7 @@ class AgentDashboardAssetService:
             return self._generate_assets_from_plan_linear(
                 plan=plan,
                 settings=settings,
+                runtime_context=runtime_context,
                 run_id=run_id,
                 on_stage_event=on_stage_event,
                 on_run_event=on_run_event,
@@ -122,6 +125,7 @@ class AgentDashboardAssetService:
         return self._generate_assets_from_plan_dag(
             plan=plan,
             settings=settings,
+            runtime_context=runtime_context,
             run_id=run_id,
             on_stage_event=on_stage_event,
             on_run_event=on_run_event,
@@ -208,6 +212,7 @@ class AgentDashboardAssetService:
         *,
         plan: AgentPlan,
         settings: GroqSettings,
+        runtime_context: AssetExecutionRuntimeContext | None,
         run_id: str | None,
         on_stage_event: Callable[[StageDiagnostic], None] | None,
         on_run_event: Callable[[RunLedgerRecord], None] | None,
@@ -322,6 +327,7 @@ class AgentDashboardAssetService:
                     tool=tool,
                     payload=payloads.get(tool.intent, {}),
                     settings=settings,
+                    runtime_context=runtime_context,
                     available_artifacts=available_artifacts,
                     run_id=run_id_value,
                     queue_wait_ms=queue_wait_ms,
@@ -339,6 +345,7 @@ class AgentDashboardAssetService:
                             tool=tool,
                             payload=payloads.get(tool.intent, {}),
                             settings=settings,
+                            runtime_context=runtime_context,
                             available_artifacts=dict(available_artifacts),
                             run_id=run_id_value,
                             queue_wait_ms=queue_wait_ms,
@@ -410,6 +417,7 @@ class AgentDashboardAssetService:
         *,
         plan: AgentPlan,
         settings: GroqSettings,
+        runtime_context: AssetExecutionRuntimeContext | None,
         run_id: str | None,
         on_stage_event: Callable[[StageDiagnostic], None] | None,
         on_run_event: Callable[[RunLedgerRecord], None] | None,
@@ -456,6 +464,7 @@ class AgentDashboardAssetService:
                 tool=tool,
                 payload=payloads.get(tool.intent, {}),
                 settings=settings,
+                runtime_context=runtime_context,
                 available_artifacts=available_artifacts,
                 run_id=run_id_value,
                 queue_wait_ms=0,
@@ -498,6 +507,7 @@ class AgentDashboardAssetService:
         tool: AgentToolDefinition,
         payload: dict[str, object],
         settings: GroqSettings,
+        runtime_context: AssetExecutionRuntimeContext | None,
         available_artifacts: ArtifactMap,
         run_id: str,
         queue_wait_ms: int,
@@ -529,6 +539,7 @@ class AgentDashboardAssetService:
             tool=tool,
             payload=payload,
             settings=settings,
+            runtime_context=runtime_context or AssetExecutionRuntimeContext(),
             intent_router=self._intent_router,
             executor_registry=self._asset_executor_registry,
             available_artifacts=available_artifacts,

@@ -1,0 +1,27 @@
+[
+  {
+    "id": "Q1",
+    "topic": "Transformers in AI",
+    "constraints": "practical architecture overview"
+  },
+  {
+    "id": "Q2",
+    "topic": "Agentic workflows vs agents",
+    "constraints": "enterprise implementation patterns"
+  },
+  {
+    "id": "Q3",
+    "topic": "RAG system design",
+    "constraints": "indexing retrieval evaluation basics"
+  },
+  {
+    "id": "Q4",
+    "topic": "Model context protocol",
+    "constraints": "tool calling integration examples"
+  },
+  {
+    "id": "Q5",
+    "topic": "LLM observability metrics",
+    "constraints": "latency quality cost monitoring"
+  }
+]

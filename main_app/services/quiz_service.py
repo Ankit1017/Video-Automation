@@ -41,6 +41,7 @@ class QuizService:
         grounding_context: str = "",
         source_manifest: list[dict[str, Any]] | None = None,
         require_citations: bool = False,
+        grounding_metadata: dict[str, Any] | None = None,
         settings: GroqSettings,
     ) -> QuizGenerationResult:
         requested_questions = max(3, min(int(question_count), 25))
@@ -146,6 +147,7 @@ class QuizService:
                     "grounded_mode": bool(grounding_context.strip()),
                     "require_citations": bool(require_citations),
                     "sources": list(source_manifest or []),
+                    "grounding_metadata": dict(grounding_metadata or {}),
                 },
                 result_payload=parsed_quiz if parsed_quiz is not None else {},
                 status="error" if parse_error else "success",

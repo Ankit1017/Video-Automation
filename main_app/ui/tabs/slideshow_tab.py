@@ -4,9 +4,10 @@ from typing import Any
 
 import streamlit as st
 
-from main_app.models import GroqSettings
+from main_app.models import GroqSettings, WebSourcingSettings
 from main_app.services.background_jobs import BackgroundJobContext, BackgroundJobManager
 from main_app.services.cached_llm_service import CachedLLMService
+from main_app.services.global_grounding_service import GlobalGroundingService
 from main_app.services.slide_deck_exporter import SlideDeckExporter
 from main_app.services.slideshow_service import SlideShowService
 from main_app.services.source_grounding_service import SourceGroundingService
@@ -155,10 +156,12 @@ def render_slideshow_tab(
     slideshow_service: SlideShowService,
     llm_service: CachedLLMService,
     settings: GroqSettings,
+    web_sourcing_settings: WebSourcingSettings,
     cache_count_placeholder: Any,
     slide_exporter: SlideDeckExporter,
     job_manager: BackgroundJobManager,
     source_grounding_service: SourceGroundingService,
+    global_grounding_service: GlobalGroundingService,
 ) -> None:
     st.markdown(SLIDESHOW_TAB_CSS, unsafe_allow_html=True)
     st.subheader("Slide Show Builder")
@@ -179,6 +182,10 @@ def render_slideshow_tab(
         grounding = render_source_grounding_controls(
             key_prefix="slideshow",
             source_grounding_service=source_grounding_service,
+            global_grounding_service=global_grounding_service,
+            web_settings=web_sourcing_settings,
+            topic=topic,
+            constraints=constraints,
         )
 
     with control_col:
@@ -240,7 +247,11 @@ def render_slideshow_tab(
             st.error("Please enter a topic.")
             st.stop()
         if grounding.enabled and not grounding.grounding_context:
-            st.error("Source-grounded mode is enabled but no valid source text was loaded.")
+            strict_warning = next(
+                (item for item in grounding.warnings if "Strict mode is enabled" in str(item)),
+                "",
+            )
+            st.error(strict_warning or "Source-grounded mode is enabled but no valid source text was loaded.")
             st.stop()
 
         topic_clean = topic.strip()
@@ -262,6 +273,7 @@ def render_slideshow_tab(
                 grounding_context=grounding_context,
                 source_manifest=source_manifest,
                 require_citations=require_citations,
+                grounding_metadata=grounding.diagnostics,
                 settings=settings,
             )
             context.raise_if_cancelled()

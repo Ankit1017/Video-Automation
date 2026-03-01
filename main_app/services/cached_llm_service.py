@@ -63,6 +63,44 @@ class CachedLLMService:
             return f"{label} | {task} | {model_name} | {cache_key[:8]}"
         return f"{cache_key[:8]} (legacy)"
 
+    def cache_entry(self, cache_key: str) -> dict[str, Any] | None:
+        cache_entry = self._cache_data.get(cache_key)
+        if not isinstance(cache_entry, dict):
+            return None
+        response_text = str(cache_entry.get("response", ""))
+        usage = self._extract_cached_usage(cache_entry)
+        return {
+            "key": cache_key,
+            "task": " ".join(str(cache_entry.get("task", "")).split()).strip(),
+            "model": " ".join(str(cache_entry.get("model", "")).split()).strip(),
+            "topic": " ".join(str(cache_entry.get("topic", "")).split()).strip(),
+            "label": " ".join(str(cache_entry.get("label", "")).split()).strip(),
+            "response": response_text,
+            "response_chars": len(response_text),
+            "usage": self._usage_to_cache_dict(usage),
+        }
+
+    def cache_entries_latest_first(self) -> list[dict[str, Any]]:
+        entries: list[dict[str, Any]] = []
+        for cache_key in self.cache_keys_latest_first():
+            entry = self.cache_entry(cache_key)
+            if entry is None:
+                entries.append(
+                    {
+                        "key": cache_key,
+                        "task": "",
+                        "model": "",
+                        "topic": "",
+                        "label": "",
+                        "response": "",
+                        "response_chars": 0,
+                        "usage": None,
+                    }
+                )
+            else:
+                entries.append(entry)
+        return entries
+
     def clear_entry(self, cache_key: str) -> None:
         self._cache_data.pop(cache_key, None)
         self._cache_store.save(self._cache_data)

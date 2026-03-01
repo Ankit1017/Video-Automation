@@ -4,8 +4,9 @@ from typing import Any
 
 import streamlit as st
 
-from main_app.models import GroqSettings
+from main_app.models import GroqSettings, WebSourcingSettings
 from main_app.services.cached_llm_service import CachedLLMService
+from main_app.services.global_grounding_service import GlobalGroundingService
 from main_app.services.source_grounding_service import SourceGroundingService
 from main_app.domains.topic.services.topic_explainer_service import TopicExplainerService
 from main_app.ui.components import render_source_grounding_controls
@@ -16,8 +17,10 @@ def render_explainer_tab(
     explainer_service: TopicExplainerService,
     llm_service: CachedLLMService,
     settings: GroqSettings,
+    web_sourcing_settings: WebSourcingSettings,
     cache_count_placeholder: Any,
     source_grounding_service: SourceGroundingService,
+    global_grounding_service: GlobalGroundingService,
 ) -> None:
     st.subheader("Topic Input")
     topic = st.text_input("Topic", placeholder="e.g. Quantum computing for beginners", key="explainer_topic")
@@ -30,6 +33,10 @@ def render_explainer_tab(
     grounding = render_source_grounding_controls(
         key_prefix="explainer",
         source_grounding_service=source_grounding_service,
+        global_grounding_service=global_grounding_service,
+        web_settings=web_sourcing_settings,
+        topic=topic,
+        constraints=additional_instructions,
     )
 
     generate = st.button("Generate Detailed Description", type="primary", key="generate_explainer")
@@ -46,7 +53,11 @@ def render_explainer_tab(
         st.error("Please enter a topic.")
         st.stop()
     if grounding.enabled and not grounding.grounding_context:
-        st.error("Source-grounded mode is enabled but no valid source text was loaded.")
+        strict_warning = next(
+            (item for item in grounding.warnings if "Strict mode is enabled" in str(item)),
+            "",
+        )
+        st.error(strict_warning or "Source-grounded mode is enabled but no valid source text was loaded.")
         st.stop()
 
     try:
@@ -57,6 +68,7 @@ def render_explainer_tab(
                 grounding_context=grounding.grounding_context,
                 source_manifest=grounding.source_manifest,
                 require_citations=grounding.require_citations,
+                grounding_metadata=grounding.diagnostics,
                 settings=settings,
             )
 

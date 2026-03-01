@@ -6,13 +6,15 @@ from typing import Any
 import streamlit as st
 
 from main_app.infrastructure.agent_dashboard_session_store import AgentDashboardSessionRepository
-from main_app.models import GroqSettings
+from main_app.models import GroqSettings, WebSourcingSettings
 from main_app.services.agent_dashboard import AgentDashboardService
 from main_app.services.cached_llm_service import CachedLLMService
+from main_app.services.global_grounding_service import GlobalGroundingService
 from main_app.services.intent import IntentRouterService
 from main_app.services.quiz_exporter import QuizExporter
 from main_app.services.report_exporter import ReportExporter
 from main_app.services.slide_deck_exporter import SlideDeckExporter
+from main_app.services.source_grounding_service import SourceGroundingService
 from main_app.services.video_asset_service import VideoAssetService
 from main_app.services.video_exporter import VideoExporter
 from main_app.ui.agent_dashboard import (
@@ -30,6 +32,7 @@ def render_agent_dashboard_tab(
     agent_dashboard_service: AgentDashboardService,
     llm_service: CachedLLMService,
     settings: GroqSettings,
+    web_sourcing_settings: WebSourcingSettings,
     cache_count_placeholder: Any,
     session_store: AgentDashboardSessionRepository,
     quiz_exporter: QuizExporter,
@@ -37,6 +40,8 @@ def render_agent_dashboard_tab(
     slide_exporter: SlideDeckExporter,
     video_service: VideoAssetService,
     video_exporter: VideoExporter,
+    source_grounding_service: SourceGroundingService,
+    global_grounding_service: GlobalGroundingService,
     asset_render_handlers: dict[str, AgentAssetRenderHandler] | None = None,
 ) -> None:
     session_manager = AgentDashboardSessionManager(session_store)
@@ -47,6 +52,9 @@ def render_agent_dashboard_tab(
         cache_count_placeholder=cache_count_placeholder,
         agent_dashboard_service=agent_dashboard_service,
         session_manager=session_manager,
+        web_sourcing_settings=web_sourcing_settings,
+        source_grounding_service=source_grounding_service,
+        global_grounding_service=global_grounding_service,
     )
     renderer = AgentAssetRenderer(
         AgentAssetRenderContext(

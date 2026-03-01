@@ -51,11 +51,7 @@ def run_streamlit_app() -> None:
 
     st.title(APP_TITLE)
     st.write(APP_DESCRIPTION)
-    sidebar_result = render_sidebar(
-        llm_service=llm_service,
-        cache_location=storage_bundle.cache_label,
-        observability_service=observability_service,
-    )
+    sidebar_result = render_sidebar()
 
     if "background_job_manager" not in st.session_state:
         st.session_state.background_job_manager = BackgroundJobManager(max_workers=2)
@@ -64,8 +60,11 @@ def run_streamlit_app() -> None:
     registrations = build_main_registrations(
         container=container,
         llm_service=llm_service,
+        observability_service=observability_service,
         settings=sidebar_result.settings,
+        web_sourcing_settings=sidebar_result.web_sourcing_settings,
         cache_count_placeholder=sidebar_result.cache_count_placeholder,
+        cache_location=storage_bundle.cache_label,
         job_manager=job_manager,
     )
-    render_main_tabs(registrations)
+    render_main_tabs(registrations, enabled_tab_titles=sidebar_result.enabled_tab_titles)

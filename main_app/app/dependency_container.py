@@ -16,6 +16,7 @@ from main_app.services.audio_overview_service import AudioOverviewService
 from main_app.services.cached_llm_service import CachedLLMService
 from main_app.services.data_table_service import DataTableService
 from main_app.services.flashcards_service import FlashcardsService
+from main_app.services.global_grounding_service import GlobalGroundingService
 from main_app.services.intent import IntentRouterService
 from main_app.services.mind_map_service import MindMapService
 from main_app.services.quiz_export_service import QuizExportService
@@ -46,6 +47,7 @@ class AppContainer:
     report_export_service: ReportExportService
     video_export_service: VideoExportService
     source_grounding_service: SourceGroundingService
+    global_grounding_service: GlobalGroundingService
     asset_history_service: AssetHistoryService
     agent_dashboard_session_store: Any
 
@@ -93,6 +95,10 @@ def build_app_container(
         audio_overview_service,
         history_service=asset_history_service,
     )
+    source_grounding_service = SourceGroundingService()
+    global_grounding_service = GlobalGroundingService(
+        source_grounding_service=source_grounding_service,
+    )
     intent_router_service = IntentRouterService(llm_service, IntentParser())
     agent_dashboard_service = AgentDashboardService(
         intent_router=intent_router_service,
@@ -121,7 +127,8 @@ def build_app_container(
         quiz_export_service=QuizExportService(),
         report_export_service=ReportExportService(),
         video_export_service=VideoExportService(),
-        source_grounding_service=SourceGroundingService(),
+        source_grounding_service=source_grounding_service,
+        global_grounding_service=global_grounding_service,
         asset_history_service=asset_history_service,
         agent_dashboard_session_store=storage_bundle.agent_dashboard_session_store,
     )

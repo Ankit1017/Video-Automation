@@ -53,6 +53,7 @@ class ReportService:
         grounding_context: str = "",
         source_manifest: list[dict[str, Any]] | None = None,
         require_citations: bool = False,
+        grounding_metadata: dict[str, Any] | None = None,
         settings: GroqSettings,
     ) -> ReportGenerationResult:
         selected_format = self.get_format(format_key)
@@ -115,6 +116,7 @@ class ReportService:
                     "grounded_mode": bool(grounding_context.strip()),
                     "require_citations": bool(require_citations),
                     "sources": list(source_manifest or []),
+                    "grounding_metadata": dict(grounding_metadata or {}),
                 },
                 result_payload={"content": normalized_content},
                 status="success",

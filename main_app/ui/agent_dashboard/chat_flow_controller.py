@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from main_app.models import AgentPlan, GroqSettings
+from main_app.models import AgentPlan, GroqSettings, WebSourcingSettings
 from main_app.services.agent_dashboard import AgentDashboardService
+from main_app.services.agent_dashboard.executor_types import AssetExecutionRuntimeContext
 from main_app.services.cached_llm_service import CachedLLMService
+from main_app.services.global_grounding_service import GlobalGroundingService
+from main_app.services.source_grounding_service import SourceGroundingService
 from main_app.ui.agent_dashboard.session_manager import AgentDashboardSessionManager
 from main_app.ui.agent_dashboard.state_gateway import SessionStateGateway
 
@@ -18,12 +21,18 @@ class AgentDashboardChatFlowController:
         cache_count_placeholder: Any,
         agent_dashboard_service: AgentDashboardService,
         session_manager: AgentDashboardSessionManager,
+        web_sourcing_settings: WebSourcingSettings,
+        source_grounding_service: SourceGroundingService,
+        global_grounding_service: GlobalGroundingService,
     ) -> None:
         self._settings = settings
         self._llm_service = llm_service
         self._cache_count_placeholder = cache_count_placeholder
         self._agent_dashboard_service = agent_dashboard_service
         self._session_manager = session_manager
+        self._web_sourcing_settings = web_sourcing_settings
+        self._source_grounding_service = source_grounding_service
+        self._global_grounding_service = global_grounding_service
         self._state: SessionStateGateway = session_manager.state
 
     def process_prompt(
@@ -216,13 +225,31 @@ class AgentDashboardChatFlowController:
             plan=source_plan,
             settings=self._settings,
         )
+        runtime_context, grounding_notes, blocked = self._build_runtime_grounding_context(
+            plan=auto_filled_plan,
+            last_user_message=last_user_message,
+        )
+        if blocked:
+            self._state.set("agent_dashboard_pending_plan", None)
+            self._append_assistant_entry_with_followups(
+                entry={
+                    "role": "assistant",
+                    "text": "Strict web-grounding mode blocked generation because no valid sources were found.",
+                    "intents": list(auto_filled_plan.intents),
+                    "payloads": dict(auto_filled_plan.payloads),
+                    "notes": [*notes, *fill_notes, *grounding_notes],
+                },
+                last_user_message=last_user_message,
+            )
+            return
 
         assets, generation_notes = self._agent_dashboard_service.generate_assets_from_plan(
             plan=auto_filled_plan,
             settings=self._settings,
+            runtime_context=runtime_context,
         )
 
-        all_notes = [*notes, *fill_notes, *generation_notes]
+        all_notes = [*notes, *fill_notes, *grounding_notes, *generation_notes]
         assistant_text = "Processed intents, resolved requirements, and generated assets in this chat."
 
         self._state.set("agent_dashboard_pending_plan", None)
@@ -244,6 +271,43 @@ class AgentDashboardChatFlowController:
 
         if not (cache_hit and fill_cache_hit):
             self._cache_count_placeholder.caption(f"Cached responses: {self._llm_service.count}")
+
+    def _build_runtime_grounding_context(
+        self,
+        *,
+        plan: AgentPlan,
+        last_user_message: str,
+    ) -> tuple[AssetExecutionRuntimeContext, list[str], bool]:
+        if not self._web_sourcing_settings.enabled:
+            return AssetExecutionRuntimeContext(), [], False
+
+        topic = self._agent_dashboard_service.extract_primary_topic_from_plan(plan)
+        query_topic = topic or " ".join(str(last_user_message).split()).strip()
+        query_constraints = " ".join(str(last_user_message).split()).strip()
+        sources, warnings, diagnostics = self._global_grounding_service.build_sources(
+            [],
+            topic=query_topic,
+            constraints=query_constraints,
+            web_settings=self._web_sourcing_settings,
+            max_sources=min(8, max(1, int(self._web_sourcing_settings.max_fetch_pages))),
+        )
+        blocked = bool(self._web_sourcing_settings.strict_mode and not sources)
+        notes: list[str] = []
+        if sources:
+            notes.append(f"Web grounding collected {len(sources)} source(s) for this run.")
+        for warning in warnings:
+            notes.append(f"Web grounding note: {warning}")
+
+        grounding_context = self._source_grounding_service.build_grounding_context(sources)
+        source_manifest = self._source_grounding_service.build_source_manifest(sources)
+        require_citations = bool(sources)
+        runtime_context = AssetExecutionRuntimeContext(
+            grounding_context=grounding_context,
+            source_manifest=source_manifest,
+            require_citations=require_citations,
+            diagnostics=dict(diagnostics),
+        )
+        return runtime_context, notes, blocked
 
     def _append_assistant_entry_with_followups(
         self,
@@ -285,4 +349,3 @@ class AgentDashboardChatFlowController:
             if fields:
                 return True
         return False
-

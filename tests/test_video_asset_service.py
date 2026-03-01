@@ -154,6 +154,9 @@ class TestVideoAssetService(unittest.TestCase):
         self.assertEqual(payload.get("video_template"), "standard")
         self.assertEqual(payload.get("animation_style"), "smooth")
         self.assertEqual(payload.get("representation_mode"), "auto")
+        metadata = payload.get("metadata", {})
+        self.assertIsInstance(metadata, dict)
+        self.assertEqual(metadata.get("script_language"), "english")
         self.assertEqual(result.total_calls, 3)
         # 1 per slide narration call
         self.assertEqual(len(self.llm.calls), 2)
@@ -227,6 +230,49 @@ class TestVideoAssetService(unittest.TestCase):
         prompt_texts = [item.get("user_prompt", "") for item in self.llm.calls if item.get("task") == "video_slide_script"]
         self.assertTrue(prompt_texts)
         self.assertTrue(all("Optional YouTube educational creator style" not in text for text in prompt_texts))
+
+    def test_generate_includes_hinglish_prompt_block_when_enabled(self) -> None:
+        result = self.service.generate(
+            topic="Segment Trees",
+            constraints="",
+            subtopic_count=2,
+            slides_per_subtopic=1,
+            code_mode="auto",
+            speaker_count=2,
+            conversation_style="Educational Discussion",
+            use_hinglish_script=True,
+            settings=self.settings,
+        )
+
+        self.assertIsNone(result.parse_error)
+        payload = result.video_payload or {}
+        metadata = payload.get("metadata", {})
+        self.assertEqual(metadata.get("script_language"), "hinglish")
+        prompt_texts = [item.get("user_prompt", "") for item in self.llm.calls if item.get("task") == "video_slide_script"]
+        self.assertTrue(prompt_texts)
+        self.assertTrue(any("Optional script language mode: Roman Hinglish." in text for text in prompt_texts))
+        self.assertTrue(any("Use only Latin/Roman script" in text for text in prompt_texts))
+
+    def test_generate_excludes_hinglish_prompt_block_when_disabled(self) -> None:
+        result = self.service.generate(
+            topic="Segment Trees",
+            constraints="",
+            subtopic_count=2,
+            slides_per_subtopic=1,
+            code_mode="auto",
+            speaker_count=2,
+            conversation_style="Educational Discussion",
+            use_hinglish_script=False,
+            settings=self.settings,
+        )
+
+        self.assertIsNone(result.parse_error)
+        payload = result.video_payload or {}
+        metadata = payload.get("metadata", {})
+        self.assertEqual(metadata.get("script_language"), "english")
+        prompt_texts = [item.get("user_prompt", "") for item in self.llm.calls if item.get("task") == "video_slide_script"]
+        self.assertTrue(prompt_texts)
+        self.assertTrue(all("Optional script language mode: Roman Hinglish." not in text for text in prompt_texts))
 
 
 if __name__ == "__main__":

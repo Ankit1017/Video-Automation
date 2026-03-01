@@ -166,6 +166,32 @@ class TestVideoExportService(unittest.TestCase):
             self.assertNotIn("\\", normalized)
         self.assertTrue(str(normalized).strip())
 
+    def test_ensure_pillow_resample_compat_sets_antialias_from_resampling(self) -> None:
+        class _FakeResampling:
+            LANCZOS = 123
+
+        class _FakeImage:
+            Resampling = _FakeResampling
+
+        self.service._ensure_pillow_resample_compat(image_module=_FakeImage)
+        self.assertTrue(hasattr(_FakeImage, "ANTIALIAS"))
+        self.assertEqual(_FakeImage.ANTIALIAS, 123)
+
+    def test_ensure_pillow_resample_compat_sets_antialias_from_lanczos_fallback(self) -> None:
+        class _FakeImage:
+            LANCZOS = 456
+
+        self.service._ensure_pillow_resample_compat(image_module=_FakeImage)
+        self.assertTrue(hasattr(_FakeImage, "ANTIALIAS"))
+        self.assertEqual(_FakeImage.ANTIALIAS, 456)
+
+    def test_ensure_pillow_resample_compat_keeps_existing_antialias(self) -> None:
+        class _FakeImage:
+            ANTIALIAS = 789
+
+        self.service._ensure_pillow_resample_compat(image_module=_FakeImage)
+        self.assertEqual(_FakeImage.ANTIALIAS, 789)
+
 
 if __name__ == "__main__":
     unittest.main()

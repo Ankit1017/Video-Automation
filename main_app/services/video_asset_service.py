@@ -30,6 +30,13 @@ class VideoAssetService:
         "- Prefer practical examples and crisp transitions.\n"
         "- Avoid aggressive like/subscribe/click CTA language.\n"
     )
+    _HINGLISH_PROMPT_BLOCK = (
+        "Optional script language mode: Roman Hinglish.\n"
+        "- Write natural spoken Hinglish with Hindi + English mixed in each slide conversation.\n"
+        "- Use only Latin/Roman script (no Devanagari).\n"
+        "- Keep lines concise, educational, and spoken-friendly.\n"
+        "- Preserve technical terms in English when clearer.\n"
+    )
 
     def __init__(
         self,
@@ -59,6 +66,7 @@ class VideoAssetService:
         animation_style: str = "smooth",
         representation_mode: str = "auto",
         use_youtube_prompt: bool = False,
+        use_hinglish_script: bool = False,
         settings: GroqSettings,
     ) -> VideoGenerationResult:
         requested_speakers = max(2, min(int(speaker_count), 6))
@@ -69,6 +77,7 @@ class VideoAssetService:
         template_clean = " ".join(str(video_template).split()).strip().lower() or "standard"
         animation_style_clean = " ".join(str(animation_style).split()).strip().lower() or "smooth"
         representation_mode_clean = normalize_representation_mode(representation_mode)
+        use_hinglish_script_mode = bool(use_hinglish_script)
         parse_notes: list[str] = []
         cache_hits = 0
         total_calls = 0
@@ -94,6 +103,7 @@ class VideoAssetService:
                     "animation_style": animation_style_clean,
                     "representation_mode": representation_mode_clean,
                     "youtube_prompt": bool(use_youtube_prompt),
+                    "hinglish_script": use_hinglish_script_mode,
                 },
                 result_payload=result.video_payload if result.video_payload else {},
                 status="error" if result.parse_error else "success",
@@ -140,6 +150,7 @@ class VideoAssetService:
                 speaker_roster=speaker_roster,
                 conversation_style=conversation_style_clean,
                 use_youtube_prompt=bool(use_youtube_prompt),
+                use_hinglish_script=use_hinglish_script_mode,
                 settings=settings,
             )
             total_calls += 1
@@ -203,6 +214,7 @@ class VideoAssetService:
                 "code_mode": normalized_mode,
                 "representation_mode": representation_mode_clean,
                 "youtube_prompt": bool(use_youtube_prompt),
+                "script_language": "hinglish" if use_hinglish_script_mode else "english",
             },
         }
         result = VideoGenerationResult(
@@ -270,6 +282,7 @@ class VideoAssetService:
         speaker_roster: list[dict[str, str]],
         conversation_style: str,
         use_youtube_prompt: bool,
+        use_hinglish_script: bool,
         settings: GroqSettings,
     ) -> tuple[str, bool]:
         speaker_lines = "\n".join(
@@ -318,6 +331,8 @@ class VideoAssetService:
             "- Keep each turn concise and spoken-friendly.\n"
             "- Return JSON only."
         )
+        if use_hinglish_script:
+            user_prompt += "\n\n" + self._HINGLISH_PROMPT_BLOCK
         if use_youtube_prompt:
             user_prompt += "\n\n" + self._YOUTUBE_PROMPT_BLOCK
         messages = [

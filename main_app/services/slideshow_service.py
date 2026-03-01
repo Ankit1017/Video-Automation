@@ -36,6 +36,7 @@ class SlideShowService:
         grounding_context: str = "",
         source_manifest: list[dict[str, Any]] | None = None,
         require_citations: bool = False,
+        grounding_metadata: dict[str, Any] | None = None,
         settings: GroqSettings,
         record_history: bool = True,
     ) -> SlideShowGenerationResult:
@@ -72,6 +73,7 @@ class SlideShowService:
                     "grounded_mode": bool(grounding_context.strip()),
                     "require_citations": bool(require_citations),
                     "sources": list(source_manifest or []),
+                    "grounding_metadata": dict(grounding_metadata or {}),
                 },
                 result_payload={"slides": result.slides} if result.slides else {},
                 status="error" if result.parse_error else "success",

@@ -20,7 +20,7 @@ if "groq" not in sys.modules:
     groq_stub.Groq = _GroqStub
     sys.modules["groq"] = groq_stub
 
-from main_app.models import AgentPlan, GroqSettings
+from main_app.models import AgentPlan
 from main_app.services.agent_dashboard.asset_executor_registry import AgentAssetExecutorRegistry
 from main_app.services.agent_dashboard.asset_service import AgentDashboardAssetService
 from main_app.services.agent_dashboard.tool_registry import build_default_agent_tool_registry

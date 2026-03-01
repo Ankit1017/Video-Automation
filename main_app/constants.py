@@ -13,6 +13,7 @@ CACHE_FILE = Path(".cache/llm_cache.json")
 QUIZ_HISTORY_FILE = Path(".cache/quiz_history.json")
 AGENT_DASHBOARD_SESSIONS_FILE = Path(".cache/agent_dashboard_sessions.json")
 ASSET_HISTORY_FILE = Path(".cache/asset_history.json")
+SESSION_DEFAULT_OVERRIDES_FILE = Path(".cache/session_default_overrides.json")
 PRESET_MODELS = [
     "llama-3.1-8b-instant",
     "allam-2-7b",
@@ -41,6 +42,10 @@ TAB_TITLES = [
     "Slide Show",
     "Video Builder",
     "Audio Overview",
+    "Web Sourcing Check",
+    "Cache Center",
+    "Observability",
+    "Additional Settings",
     "Chat Bot Intent",
     "Agent Dashboard",
     "Asset History",

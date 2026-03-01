@@ -97,6 +97,7 @@ class VideoExportService:
 
         try:
             from PIL import Image, ImageDraw, ImageFont  # type: ignore
+            self._ensure_pillow_resample_compat(image_module=Image)
             from moviepy.editor import AudioFileClip, ImageClip, concatenate_videoclips, vfx  # type: ignore
         except ImportError:
             return None, "Video export requires `moviepy` and `Pillow`. Install dependencies and retry."
@@ -127,7 +128,7 @@ class VideoExportService:
                 audio_duration=audio_duration,
             )
 
-            for index, (slide, duration) in enumerate(zip(slides, slide_durations), start=1):
+            for index, (slide, duration) in enumerate(zip(slides, slide_durations, strict=False), start=1):
                 slide_clips = self._build_slide_clips(
                     slide=slide if isinstance(slide, dict) else {},
                     topic=topic,
@@ -190,6 +191,23 @@ class VideoExportService:
             if render_root is not None:
                 self._cleanup_render_workdir(render_root)
 
+    @staticmethod
+    def _ensure_pillow_resample_compat(*, image_module: object) -> None:
+        # Pillow 10 removed Image.ANTIALIAS, but older moviepy versions still reference it.
+        if hasattr(image_module, "ANTIALIAS"):
+            return
+
+        resampling = getattr(image_module, "Resampling", None)
+        if resampling is not None:
+            lanczos = getattr(resampling, "LANCZOS", None)
+            if lanczos is not None:
+                image_module.ANTIALIAS = lanczos
+                return
+
+        fallback_lanczos = getattr(image_module, "LANCZOS", None)
+        if fallback_lanczos is not None:
+            image_module.ANTIALIAS = fallback_lanczos
+
     def _build_slide_clips(
         self,
         *,
@@ -215,7 +233,7 @@ class VideoExportService:
         if self._should_use_progressive_reveal(slide=normalized_slide, animation_style=animation_style):
             reveal_steps = self._reveal_steps(slide=normalized_slide)
             ratios = self._segment_ratios(count=len(reveal_steps))
-            for pos, (revealed_bullets, ratio) in enumerate(zip(reveal_steps, ratios)):
+            for pos, (revealed_bullets, ratio) in enumerate(zip(reveal_steps, ratios, strict=False)):
                 stage_duration = max(0.9, duration * ratio)
                 image_path = path_prefix.with_name(f"{path_prefix.name}_stage_{pos+1:02d}.png")
                 self._render_slide_image(

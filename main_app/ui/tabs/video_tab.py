@@ -18,6 +18,23 @@ from main_app.ui.components import (
 )
 from main_app.ui.error_handling import UI_HANDLED_EXCEPTIONS, report_ui_error
 
+
+_VIDEO_DEFAULT_CODE_MODE = "auto"
+_VIDEO_DEFAULT_REPRESENTATION_MODE = "visual"
+_VIDEO_DEFAULT_SPEAKER_COUNT = 2
+_VIDEO_DEFAULT_CONVERSATION_STYLE = "Educational Discussion"
+_VIDEO_DEFAULT_TEMPLATE = "youtube"
+_VIDEO_DEFAULT_USE_YOUTUBE_PROMPT = True
+_VIDEO_DEFAULT_USE_HINGLISH_SCRIPT = False
+_VIDEO_DEFAULT_SLOW_AUDIO = False
+
+
+def _resolve_initial_playback_language(*, selected_language: str, use_hinglish_script: bool) -> str:
+    if use_hinglish_script:
+        return "hi"
+    return " ".join(str(selected_language).split()).strip() or "en"
+
+
 VIDEO_TAB_CSS = """
 <style>
     .video-title {
@@ -72,6 +89,7 @@ def render_video_tab(
 
     with control_col:
         st.markdown("#### Video Controls")
+        st.caption("YouTube style defaults are applied automatically for simpler generation.")
         subtopic_count = st.slider(
             "Subtopics",
             min_value=2,
@@ -88,61 +106,16 @@ def render_video_tab(
             step=1,
             key="video_slides_per_subtopic",
         )
-        code_mode = st.radio(
-            "Code Support",
-            options=["auto", "force", "none"],
-            format_func=lambda value: {
-                "auto": "Auto (intent-based)",
-                "force": "Force some code slides",
-                "none": "No code slides",
-            }[value],
-            index=0,
-            horizontal=False,
-            key="video_code_mode",
-        )
         st.selectbox(
-            "Representation Mode",
-            options=["auto", "classic", "visual"],
-            index=0,
-            key="video_representation_mode",
-            format_func=lambda value: {
-                "auto": "Auto (Balanced Mix)",
-                "classic": "Classic (Bullet-first)",
-                "visual": "Visual (Diagram-style)",
-            }[value],
-        )
-        speaker_count = st.slider(
-            "Voice Speakers",
-            min_value=2,
-            max_value=6,
-            value=2,
-            step=1,
-            key="video_speaker_count",
-        )
-        conversation_style = st.selectbox(
-            "Narration Style",
-            options=["Educational Discussion", "Interview", "Roundtable", "Debate"],
-            index=0,
-            key="video_conversation_style",
-        )
-        st.selectbox(
-            "Audio Language",
+            "Last Audio Language",
             options=["en", "hi", "es", "fr", "de", "ja"],
             index=0,
             key="video_language",
         )
-        st.checkbox("Slow narration", value=False, key="video_slow_audio")
-        st.selectbox(
-            "Video Template",
-            options=["standard", "youtube"],
-            index=0,
-            key="video_template",
-            format_func=lambda value: "Standard" if value == "standard" else "YouTube",
-        )
         st.selectbox(
             "Animation Style",
-            options=["none", "smooth", "youtube_dynamic"],
-            index=1,
+            options=["youtube_dynamic", "smooth", "none"],
+            index=0,
             key="video_animation_style",
             format_func=lambda value: {
                 "none": "None (Static Slides)",
@@ -150,7 +123,6 @@ def render_video_tab(
                 "youtube_dynamic": "YouTube Dynamic (Reveals + Fast Motion)",
             }[value],
         )
-        st.checkbox("Use YouTube-style narration prompt", value=False, key="video_use_youtube_prompt")
         generate_video = st.button(
             "Generate Video Asset",
             key="video_generate_btn",
@@ -171,12 +143,20 @@ def render_video_tab(
 
         topic_clean = topic.strip()
         constraints_clean = constraints.strip()
-        playback_language = str(st.session_state.video_language)
-        playback_slow = bool(st.session_state.video_slow_audio)
-        video_template = str(st.session_state.video_template or "standard").strip().lower() or "standard"
-        animation_style = str(st.session_state.video_animation_style or "smooth").strip().lower() or "smooth"
-        representation_mode = str(st.session_state.video_representation_mode or "auto").strip().lower() or "auto"
-        use_youtube_prompt = bool(st.session_state.video_use_youtube_prompt)
+        selected_playback_language = str(st.session_state.video_language)
+        playback_slow = _VIDEO_DEFAULT_SLOW_AUDIO
+        video_template = _VIDEO_DEFAULT_TEMPLATE
+        animation_style = str(st.session_state.video_animation_style or "youtube_dynamic").strip().lower() or "youtube_dynamic"
+        representation_mode = _VIDEO_DEFAULT_REPRESENTATION_MODE
+        use_youtube_prompt = _VIDEO_DEFAULT_USE_YOUTUBE_PROMPT
+        use_hinglish_script = _VIDEO_DEFAULT_USE_HINGLISH_SCRIPT
+        code_mode = _VIDEO_DEFAULT_CODE_MODE
+        speaker_count = _VIDEO_DEFAULT_SPEAKER_COUNT
+        conversation_style = _VIDEO_DEFAULT_CONVERSATION_STYLE
+        playback_language = _resolve_initial_playback_language(
+            selected_language=selected_playback_language,
+            use_hinglish_script=use_hinglish_script,
+        )
 
         def _worker(context: BackgroundJobContext) -> dict[str, Any]:
             context.update_progress(progress=0.1, message="Building slideshow and narration scripts...")
@@ -192,6 +172,7 @@ def render_video_tab(
                 animation_style=animation_style,
                 representation_mode=representation_mode,
                 use_youtube_prompt=use_youtube_prompt,
+                use_hinglish_script=use_hinglish_script,
                 settings=settings,
             )
             context.raise_if_cancelled()
@@ -238,6 +219,7 @@ def render_video_tab(
                 "animation_style": animation_style,
                 "representation_mode": representation_mode,
                 "youtube_prompt": use_youtube_prompt,
+                "use_hinglish_script": use_hinglish_script,
             }
 
         job_id = job_manager.submit(
@@ -398,6 +380,7 @@ def _apply_video_job_result(
     animation_style = " ".join(str(payload.get("animation_style", "smooth")).split()).strip().lower() or "smooth"
     representation_mode = " ".join(str(payload.get("representation_mode", "auto")).split()).strip().lower() or "auto"
     youtube_prompt = bool(payload.get("youtube_prompt", False))
+    use_hinglish_script = bool(payload.get("use_hinglish_script", False))
     audio_bytes = payload.get("audio_bytes")
     audio_error = " ".join(str(payload.get("audio_error", "")).split()).strip()
     video_bytes = payload.get("video_bytes")
@@ -413,12 +396,14 @@ def _apply_video_job_result(
     st.session_state.video_slideshow_index = 0
     st.session_state.video_playback_language = language
     st.session_state.video_playback_slow_audio = slow_audio
-    # Avoid mutating widget-backed keys (`video_template`, `video_use_youtube_prompt`)
+    # Avoid mutating widget-backed keys
+    # (`video_template`, `video_use_youtube_prompt`, `video_use_hinglish_script`)
     # after those widgets are instantiated in this render pass.
     st.session_state.video_last_template = video_template
     st.session_state.video_last_animation_style = animation_style
     st.session_state.video_last_representation_mode = representation_mode
     st.session_state.video_last_youtube_prompt = youtube_prompt
+    st.session_state.video_last_use_hinglish_script = use_hinglish_script
 
     slide_count = len(video_payload.get("slides", [])) if isinstance(video_payload.get("slides"), list) else 0
     st.success(

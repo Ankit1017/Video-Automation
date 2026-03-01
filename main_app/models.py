@@ -36,6 +36,40 @@ class GroqSettings:
         return bool(self.normalized_model)
 
 
+@dataclass(frozen=True)
+class WebSourcingSettings:
+    enabled: bool = False
+    provider_key: str = "duckduckgo"
+    cache_ttl_seconds: int = 21_600
+    max_search_results: int = 8
+    max_fetch_pages: int = 6
+    max_chars_per_page: int = 4_000
+    max_total_chars: int = 20_000
+    timeout_ms: int = 8_000
+    force_refresh: bool = False
+    include_domains: list[str] | None = None
+    exclude_domains: list[str] | None = None
+    allow_recency_days: int | None = None
+    strict_mode: bool = False
+    query_variant_count: int = 3
+    candidate_pool_multiplier: int = 3
+    min_quality_score: float = 0.45
+    max_results_per_domain: int = 2
+    trusted_boost_enabled: bool = True
+    trusted_domains: list[str] | None = None
+    allow_provider_failover: bool = True
+    secondary_provider_key: str = "serper"
+    retry_count: int = 2
+    retry_base_delay_ms: int = 250
+    retry_max_delay_ms: int = 1500
+    domain_rate_limit_per_minute: int = 6
+    provider_circuit_breaker_enabled: bool = True
+    provider_error_threshold: int = 4
+    provider_cooldown_seconds: int = 120
+    provider_probe_requests: int = 1
+    reliability_diagnostics_enabled: bool = True
+
+
 @dataclass
 class MindMapGenerationResult:
     raw_text: str
