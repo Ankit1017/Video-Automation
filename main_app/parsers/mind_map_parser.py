@@ -132,7 +132,8 @@ class MindMapParser:
         if not node_name:
             return None
 
-        normalized = {"name": node_name, "children": []}
+        children: list[dict[str, Any]] = []
+        normalized: dict[str, Any] = {"name": node_name, "children": children}
         if current_depth >= max_depth:
             return normalized
 
@@ -147,6 +148,6 @@ class MindMapParser:
                 current_depth=current_depth + 1,
             )
             if normalized_child is not None:
-                normalized["children"].append(normalized_child)
+                children.append(normalized_child)
 
         return normalized

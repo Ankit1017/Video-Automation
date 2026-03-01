@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 import streamlit as st
 
+from main_app.contracts import VideoPayload
 from main_app.models import AssetHistoryRecord
 from main_app.ui.asset_history.context import AssetHistoryRenderContext
 from main_app.ui.components.interactive_callbacks import (
@@ -23,10 +26,22 @@ from main_app.ui.components import (
 )
 
 
+def _dict_list(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _video_payload(value: object) -> VideoPayload | None:
+    if not isinstance(value, dict):
+        return None
+    return cast(VideoPayload, {str(key): item for key, item in value.items()})
+
+
 def render_flashcards_record(record: AssetHistoryRecord, context: AssetHistoryRenderContext) -> None:
     payload = record.result_payload if isinstance(record.result_payload, dict) else {}
-    cards = payload.get("cards", [])
-    if not isinstance(cards, list):
+    cards = _dict_list(payload.get("cards", []))
+    if not cards:
         st.json(record.result_payload)
         return
     topic = first_non_empty_topic(record.topic, payload.get("topic", ""), fallback="Topic")
@@ -61,8 +76,8 @@ def render_flashcards_record(record: AssetHistoryRecord, context: AssetHistoryRe
 
 def render_quiz_record(record: AssetHistoryRecord, context: AssetHistoryRenderContext) -> None:
     payload = record.result_payload if isinstance(record.result_payload, dict) else {}
-    questions = payload.get("questions", [])
-    if not isinstance(questions, list):
+    questions = _dict_list(payload.get("questions", []))
+    if not questions:
         st.json(record.result_payload)
         return
     topic = first_non_empty_topic(record.topic, payload.get("topic", ""), fallback="Topic")
@@ -98,8 +113,8 @@ def render_quiz_record(record: AssetHistoryRecord, context: AssetHistoryRenderCo
 
 def render_slideshow_record(record: AssetHistoryRecord, context: AssetHistoryRenderContext) -> None:
     payload = record.result_payload if isinstance(record.result_payload, dict) else {}
-    slides = payload.get("slides", payload if isinstance(payload, list) else [])
-    if not isinstance(slides, list):
+    slides = _dict_list(payload.get("slides", []))
+    if not slides:
         st.json(record.result_payload)
         return
     topic = record.topic or str(record.request_payload.get("topic", "")).strip() or "Slideshow"
@@ -126,15 +141,16 @@ def render_slideshow_record(record: AssetHistoryRecord, context: AssetHistoryRen
 
 def render_video_record(record: AssetHistoryRecord, context: AssetHistoryRenderContext) -> None:
     payload = record.result_payload if isinstance(record.result_payload, dict) else {}
-    if not isinstance(payload, dict) or not payload:
+    video_payload = _video_payload(payload)
+    if not video_payload:
         st.json(record.result_payload)
         return
 
-    topic = first_non_empty_topic(record.topic, payload.get("topic", ""), fallback="Video")
+    topic = first_non_empty_topic(record.topic, video_payload.get("topic", ""), fallback="Video")
     scope = f"asset_history_video_{record.id}"
     render_video_view(
         topic=topic,
-        video_payload=payload,
+        video_payload=video_payload,
         config=VideoRenderConfig(
             slideshow=SlideshowRenderConfig(
                 state_index_key=f"{scope}_index",

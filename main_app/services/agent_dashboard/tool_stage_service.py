@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from time import perf_counter
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable, cast
 
-from main_app.contracts import ArtifactMap, IntentPayload, StageExecutionRecord
+from main_app.contracts import ArtifactMap, AssetArtifactEnvelope, AssetSection, IntentPayload, StageExecutionRecord
 from main_app.models import AgentAssetResult, GroqSettings
 from main_app.services.agent_dashboard.artifact_adapter import (
     build_artifact_envelope,
@@ -57,6 +57,35 @@ from main_app.services.intent import IntentRouterService
 
 RequirementCheck = Callable[["ToolStageContext"], tuple[bool, str]]
 StageAction = Callable[["ToolStageContext"], "StageActionResult"]
+
+
+def _as_dict(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): item for key, item in value.items()}
+
+
+def _as_list(value: object) -> list[object]:
+    return value if isinstance(value, list) else []
+
+
+def _artifact_sections(artifact: dict[str, object]) -> list[AssetSection]:
+    sections: list[AssetSection] = []
+    for item in _as_list(artifact.get("sections")):
+        if isinstance(item, dict):
+            sections.append(cast(AssetSection, item))
+    return sections
+
+
+def _coerce_int(value: object, default: int = 0) -> int:
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        if isinstance(value, (int, float, str)):
+            return int(value)
+        return int(str(value))
+    except (TypeError, ValueError):
+        return default
 
 
 @dataclass(frozen=True)
@@ -741,15 +770,15 @@ class AgentToolStageOrchestrator:
                 retryable=False,
             )
 
-        artifact = context.asset_result.artifact or {}
-        provenance = artifact.get("provenance") if isinstance(artifact.get("provenance"), dict) else {}
+        artifact = _as_dict(context.asset_result.artifact)
+        provenance = _as_dict(artifact.get("provenance"))
         provenance["tool_key"] = context.tool.key
         provenance["intent"] = context.tool.intent
         provenance["stage_profile"] = context.stage_profile
         provenance["trace"] = [dict(item) for item in context.execution_trace]
         artifact["provenance"] = provenance
 
-        metrics = artifact.get("metrics") if isinstance(artifact.get("metrics"), dict) else {}
+        metrics = _as_dict(artifact.get("metrics"))
         metrics.setdefault("cache_hit", bool(context.asset_result.cache_hit))
         stage_durations_ms: dict[str, int] = {}
         attempt_durations_ms: dict[str, list[int]] = {}
@@ -783,30 +812,30 @@ class AgentToolStageOrchestrator:
         metrics["queue_wait_ms"] = max(0, int(context.queue_wait_ms))
         metrics.setdefault("policy_enforced", bool(AgentToolStageOrchestrator._policy_gate_enabled()))
         artifact["metrics"] = metrics
-        context.asset_result.artifact = artifact
+        context.asset_result.artifact = cast(AssetArtifactEnvelope, artifact)
         return StageActionResult(ok=True, message="Result artifact normalized.")
 
     @staticmethod
     def _stage_validate_schema(context: ToolStageContext) -> StageActionResult:
         if context.asset_result is None:
             return StageActionResult(ok=False, message="No execution result to schema-validate.", error_code=E_SCHEMA_VALIDATION_FAILED)
-        schema_ref = context.tool.schema_ref if isinstance(context.tool.schema_ref, dict) else {}
+        schema_ref = _as_dict(context.tool.schema_ref)
         summary = validate_artifact(
             intent=context.tool.intent,
-            artifact=context.asset_result.artifact if isinstance(context.asset_result.artifact, dict) else None,
-            schema_ref=schema_ref,
+            artifact=cast(dict[str, Any] | None, context.asset_result.artifact if isinstance(context.asset_result.artifact, dict) else None),
+            schema_ref=cast(dict[str, str], schema_ref),
         )
-        artifact = context.asset_result.artifact if isinstance(context.asset_result.artifact, dict) else {}
-        provenance = artifact.get("provenance") if isinstance(artifact.get("provenance"), dict) else {}
+        artifact = _as_dict(context.asset_result.artifact)
+        provenance = _as_dict(artifact.get("provenance"))
         provenance["schema_validation"] = summary
         artifact["provenance"] = provenance
-        context.asset_result.artifact = artifact
+        context.asset_result.artifact = cast(AssetArtifactEnvelope, artifact)
         if schema_validation_passed(summary):
             context.schema_valid = True
             return StageActionResult(ok=True, message="Schema validation passed.")
         context.asset_result.status = "error"
         context.asset_result.error = schema_validation_error_message(summary)
-        sections = artifact.get("sections") if isinstance(artifact.get("sections"), list) else []
+        sections = _artifact_sections(artifact)
         sections.append(
             AgentToolStageOrchestrator._error_section(
                 code=E_SCHEMA_VALIDATION_FAILED,
@@ -816,7 +845,7 @@ class AgentToolStageOrchestrator:
             )
         )
         artifact["sections"] = sections
-        context.asset_result.artifact = artifact
+        context.asset_result.artifact = cast(AssetArtifactEnvelope, artifact)
         return StageActionResult(ok=False, message=context.asset_result.error, error_code=E_SCHEMA_VALIDATION_FAILED, retryable=False)
 
     @staticmethod
@@ -831,15 +860,15 @@ class AgentToolStageOrchestrator:
             return StageActionResult(ok=True, message="Verification skipped for tool.")
 
         summary = verify_asset_result(result=context.asset_result, tool=context.tool)
-        artifact = context.asset_result.artifact if isinstance(context.asset_result.artifact, dict) else {}
-        provenance = artifact.get("provenance") if isinstance(artifact.get("provenance"), dict) else {}
+        artifact = _as_dict(context.asset_result.artifact)
+        provenance = _as_dict(artifact.get("provenance"))
         provenance["verification"] = summary
         artifact["provenance"] = provenance
-        metrics = artifact.get("metrics") if isinstance(artifact.get("metrics"), dict) else {}
+        metrics = _as_dict(artifact.get("metrics"))
         issues = summary.get("issues", [])
         metrics["verification_issue_count"] = len(issues) if isinstance(issues, list) else 0
         artifact["metrics"] = metrics
-        context.asset_result.artifact = artifact
+        context.asset_result.artifact = cast(AssetArtifactEnvelope, artifact)
 
         if verification_passed(summary):
             context.verified = True
@@ -848,7 +877,7 @@ class AgentToolStageOrchestrator:
         message = verification_error_message(summary)
         context.asset_result.status = "error"
         context.asset_result.error = message
-        sections = artifact.get("sections") if isinstance(artifact.get("sections"), list) else []
+        sections = _artifact_sections(artifact)
         sections.append(
             AgentToolStageOrchestrator._error_section(
                 code=E_VERIFY_FAILED,
@@ -858,7 +887,7 @@ class AgentToolStageOrchestrator:
             )
         )
         artifact["sections"] = sections
-        context.asset_result.artifact = artifact
+        context.asset_result.artifact = cast(AssetArtifactEnvelope, artifact)
         return StageActionResult(ok=False, message=message, error_code=E_VERIFY_FAILED, retryable=False)
 
     @staticmethod
@@ -867,28 +896,28 @@ class AgentToolStageOrchestrator:
             return StageActionResult(ok=False, message="No execution result to policy-check.", error_code=E_POLICY_GATE_FAILED)
         if not AgentToolStageOrchestrator._policy_gate_enabled():
             context.policy_passed = True
-            artifact = context.asset_result.artifact if isinstance(context.asset_result.artifact, dict) else {}
-            metrics = artifact.get("metrics") if isinstance(artifact.get("metrics"), dict) else {}
+            artifact = _as_dict(context.asset_result.artifact)
+            metrics = _as_dict(artifact.get("metrics"))
             metrics["policy_enforced"] = False
             artifact["metrics"] = metrics
-            context.asset_result.artifact = artifact
+            context.asset_result.artifact = cast(AssetArtifactEnvelope, artifact)
             return StageActionResult(ok=True, message="Policy gate skipped by configuration.")
         summary = evaluate_policy_gate(result=context.asset_result, tool=context.tool)
-        artifact = context.asset_result.artifact if isinstance(context.asset_result.artifact, dict) else {}
-        provenance = artifact.get("provenance") if isinstance(artifact.get("provenance"), dict) else {}
+        artifact = _as_dict(context.asset_result.artifact)
+        provenance = _as_dict(artifact.get("provenance"))
         provenance["policy_gate"] = summary
         artifact["provenance"] = provenance
-        metrics = artifact.get("metrics") if isinstance(artifact.get("metrics"), dict) else {}
+        metrics = _as_dict(artifact.get("metrics"))
         metrics["policy_enforced"] = True
         artifact["metrics"] = metrics
-        context.asset_result.artifact = artifact
+        context.asset_result.artifact = cast(AssetArtifactEnvelope, artifact)
         if policy_gate_passed(summary):
             context.policy_passed = True
             return StageActionResult(ok=True, message="Policy gate passed.")
         message = policy_gate_error_message(summary)
         context.asset_result.status = "error"
         context.asset_result.error = message
-        sections = artifact.get("sections") if isinstance(artifact.get("sections"), list) else []
+        sections = _artifact_sections(artifact)
         sections.append(
             AgentToolStageOrchestrator._error_section(
                 code=E_POLICY_GATE_FAILED,
@@ -898,7 +927,7 @@ class AgentToolStageOrchestrator:
             )
         )
         artifact["sections"] = sections
-        context.asset_result.artifact = artifact
+        context.asset_result.artifact = cast(AssetArtifactEnvelope, artifact)
         return StageActionResult(ok=False, message=message, error_code=E_POLICY_GATE_FAILED, retryable=False)
 
     @staticmethod
@@ -911,8 +940,8 @@ class AgentToolStageOrchestrator:
             context.asset_result.payload = context.payload
         if context.asset_result.artifact is None:
             context.asset_result.artifact = legacy_result_to_artifact(context.asset_result)
-        artifact = context.asset_result.artifact if isinstance(context.asset_result.artifact, dict) else {}
-        provenance = artifact.get("provenance") if isinstance(artifact.get("provenance"), dict) else {}
+        artifact = _as_dict(context.asset_result.artifact)
+        provenance = _as_dict(artifact.get("provenance"))
         if "verification" not in provenance and AgentToolStageOrchestrator._verify_stage_enabled():
             provenance["verification"] = {
                 "status": "passed" if context.verified else "failed",
@@ -926,7 +955,7 @@ class AgentToolStageOrchestrator:
                 "checks_run": [],
             }
         artifact["provenance"] = provenance
-        context.asset_result.artifact = artifact
+        context.asset_result.artifact = cast(AssetArtifactEnvelope, artifact)
         return StageActionResult(ok=True, message="Result finalized.")
 
     @staticmethod
@@ -956,7 +985,7 @@ class AgentToolStageOrchestrator:
         details: dict[str, object],
         run_id: str = "",
         tool_key: str = "",
-    ) -> dict[str, object]:
+    ) -> AssetSection:
         data_details = dict(details)
         normalized_run_id = " ".join(str(run_id).split()).strip()
         normalized_tool_key = " ".join(str(tool_key).split()).strip()
@@ -964,7 +993,9 @@ class AgentToolStageOrchestrator:
             data_details["run_id"] = normalized_run_id
         if normalized_tool_key:
             data_details["tool_key"] = normalized_tool_key
-        return {
+        return cast(
+            AssetSection,
+            {
             "kind": "meta",
             "key": "error",
             "title": "Error",
@@ -975,7 +1006,8 @@ class AgentToolStageOrchestrator:
                 "details": data_details,
             },
             "optional": False,
-        }
+            },
+        )
 
     @staticmethod
     def _error_result(
@@ -1027,11 +1059,8 @@ class AgentToolStageOrchestrator:
             if tool is not None and isinstance(tool.execution_spec, dict):
                 execution_policy = tool.execution_spec.get("execution_policy")
                 if isinstance(execution_policy, dict) and execution_policy.get("timeout_ms") is not None:
-                    try:
-                        timeout = int(execution_policy.get("timeout_ms"))
-                        return max(0, timeout)
-                    except (TypeError, ValueError):
-                        return execute_stage_timeout_ms()
+                    timeout = _coerce_int(execution_policy.get("timeout_ms"), execute_stage_timeout_ms())
+                    return max(0, timeout)
             return execute_stage_timeout_ms()
         if normalized == "verify_result":
             return verify_stage_timeout_ms()
@@ -1040,12 +1069,9 @@ class AgentToolStageOrchestrator:
     @staticmethod
     def _execute_max_attempts(tool: AgentToolDefinition) -> int:
         spec = tool.execution_spec if isinstance(tool.execution_spec, dict) else {}
-        execution_policy = spec.get("execution_policy") if isinstance(spec.get("execution_policy"), dict) else {}
+        execution_policy = _as_dict(spec.get("execution_policy"))
         max_retries_raw = execution_policy.get("max_retries", execute_retry_count())
-        try:
-            max_retries = int(max_retries_raw)
-        except (TypeError, ValueError):
-            max_retries = execute_retry_count()
+        max_retries = _coerce_int(max_retries_raw, execute_retry_count())
         return max(1, max(0, max_retries) + 1)
 
     @classmethod

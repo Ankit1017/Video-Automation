@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 from main_app.contracts import QuizHistoryEntry, QuizPayload
@@ -117,7 +117,7 @@ class QuizService:
                     difficulty=difficulty,
                     constraints=constraints,
                     model=settings.normalized_model,
-                    quiz_payload=parsed_quiz,
+                    quiz_payload=cast(QuizPayload, parsed_quiz),
                 )
             except (OSError, PermissionError, ValueError, RuntimeError, TypeError) as exc:
                 # History persistence should not block quiz generation.
@@ -129,7 +129,7 @@ class QuizService:
 
         result = QuizGenerationResult(
             raw_text=raw_text,
-            parsed_quiz=parsed_quiz,
+            parsed_quiz=cast(QuizPayload | None, parsed_quiz),
             parse_error=parse_error,
             parse_note=parse_note,
         )

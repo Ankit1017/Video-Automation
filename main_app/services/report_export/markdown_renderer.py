@@ -124,7 +124,12 @@ class ReportMarkdownRenderer:
                     matched_number = re.match(r"^\d+\.\s+(.+)$", current)
                     if not matched_bullet and not matched_number:
                         break
-                    item_text = matched_bullet.group(1) if matched_bullet else matched_number.group(1)
+                    if matched_bullet is not None:
+                        item_text = matched_bullet.group(1)
+                    elif matched_number is not None:
+                        item_text = matched_number.group(1)
+                    else:
+                        break
                     list_items.append(item_text.strip())
                     index += 1
 

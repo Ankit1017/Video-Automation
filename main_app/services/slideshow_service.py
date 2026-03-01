@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from main_app.shared.slideshow.representation_normalizer import (
     normalize_representation_mode,
     normalize_slide_representation,
 )
+from main_app.contracts import SlideContent
 from main_app.models import GroqSettings, SlideShowGenerationResult
 from main_app.parsers.slideshow_parser import SlideShowParser
 from main_app.services.asset_history_service import AssetHistoryService
@@ -115,7 +116,7 @@ class SlideShowService:
             return result
 
         slides: list[dict[str, Any]] = []
-        subtopics = outline["subtopics"]
+        subtopics = outline.get("subtopics", []) if isinstance(outline, dict) else []
 
         # Intro slide created locally for consistent deck start.
         slides.append(
@@ -177,7 +178,7 @@ class SlideShowService:
                 _record_history(result)
                 return result
 
-            for slide in section_slides:
+            for slide in (section_slides or []):
                 slide["section"] = subtopic["title"]
                 slides.append(slide)
 
@@ -235,7 +236,7 @@ class SlideShowService:
         parse_notes.extend(representation_notes)
 
         result = SlideShowGenerationResult(
-            slides=slides,
+            slides=cast(list[SlideContent], slides),
             parse_error=None,
             parse_notes=parse_notes,
             cache_hits=cache_hits,

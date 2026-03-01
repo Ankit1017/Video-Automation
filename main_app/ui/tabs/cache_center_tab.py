@@ -131,6 +131,7 @@ def _render_cache_table(entries: list[dict[str, Any]], *, max_rows: int) -> None
     rows = []
     for entry in entries:
         usage = entry.get("usage") if isinstance(entry.get("usage"), dict) else {}
+        token_count = _to_int(usage.get("total_tokens", 0), 0) if isinstance(usage, dict) else 0
         rows.append(
             {
                 "key": str(entry.get("key", ""))[:12],
@@ -139,7 +140,7 @@ def _render_cache_table(entries: list[dict[str, Any]], *, max_rows: int) -> None
                 "model": str(entry.get("model", "")),
                 "topic": str(entry.get("topic", "")),
                 "chars": int(entry.get("response_chars", 0) or 0),
-                "tokens": int(usage.get("total_tokens", 0) or 0),
+                "tokens": token_count,
             }
         )
     if len(rows) > max_rows:
@@ -170,11 +171,12 @@ def _render_cache_entry_inspector(
         return
 
     usage = selected_entry.get("usage") if isinstance(selected_entry.get("usage"), dict) else {}
+    token_count = _to_int(usage.get("total_tokens", 0), 0) if isinstance(usage, dict) else 0
     detail_cols = st.columns(4)
     detail_cols[0].metric("Task", str(selected_entry.get("task", "")) or "(unknown)")
     detail_cols[1].metric("Model", str(selected_entry.get("model", "")) or "(unknown)")
     detail_cols[2].metric("Chars", str(int(selected_entry.get("response_chars", 0) or 0)))
-    detail_cols[3].metric("Tokens", str(int(usage.get("total_tokens", 0) or 0)))
+    detail_cols[3].metric("Tokens", str(token_count))
 
     st.text_input(
         "Topic",
@@ -195,3 +197,14 @@ def _render_cache_entry_inspector(
         disabled=True,
         key=f"cache_center_response_{selected_key[:8]}",
     )
+
+
+def _to_int(value: object, default: int = 0) -> int:
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        if isinstance(value, (int, float, str)):
+            return int(value)
+        return int(str(value))
+    except (TypeError, ValueError):
+        return default

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import streamlit as st
 
+from main_app.contracts import QuizPayload, QuizQuestion
 from main_app.models import GroqSettings, WebSourcingSettings
 from main_app.services.cached_llm_service import CachedLLMService
 from main_app.services.global_grounding_service import GlobalGroundingService
@@ -110,6 +111,24 @@ QUIZ_TAB_CSS = """
 """
 
 
+def _quiz_questions(payload: QuizPayload) -> list[QuizQuestion]:
+    raw_questions = payload.get("questions", [])
+    if not isinstance(raw_questions, list):
+        return []
+    questions: list[QuizQuestion] = []
+    for item in raw_questions:
+        if isinstance(item, dict):
+            questions.append(item)
+    return questions
+
+
+def _saved_quiz_questions(loaded: dict[str, Any]) -> list[QuizQuestion]:
+    quiz_payload = loaded.get("quiz")
+    if not isinstance(quiz_payload, dict):
+        return []
+    return _quiz_questions(cast(QuizPayload, quiz_payload))
+
+
 def _saved_quiz_label(saved_quizzes: list[dict[str, Any]], quiz_id: str) -> str:
     for item in saved_quizzes:
         if item["id"] == quiz_id:
@@ -133,9 +152,9 @@ def render_quiz_tab(
     source_grounding_service: SourceGroundingService,
     global_grounding_service: GlobalGroundingService,
 ) -> None:
-    def _activate_quiz(topic_text: str, questions_payload: list[dict[str, Any]]) -> None:
+    def _activate_quiz(topic_text: str, questions_payload: list[QuizQuestion]) -> None:
         st.session_state.quiz_topic = topic_text.strip()
-        st.session_state.quiz_questions = questions_payload
+        st.session_state.quiz_questions = [dict(question) for question in questions_payload]
         st.session_state.quiz_runtime_state = {
             "index": 0,
             "selected_answers": {},
@@ -175,7 +194,7 @@ def render_quiz_tab(
                 if not loaded:
                     st.error("Unable to load selected quiz from history.")
                 else:
-                    _activate_quiz(loaded["topic"], loaded["quiz"]["questions"])
+                    _activate_quiz(str(loaded.get("topic", "")), _saved_quiz_questions(loaded))
                     st.session_state.quiz_topic_input = loaded["topic"]
                     st.session_state.quiz_difficulty = loaded["difficulty"] if loaded["difficulty"] in {
                         "Beginner",
@@ -274,8 +293,16 @@ def render_quiz_tab(
                 st.code(result.raw_text)
             else:
                 parsed = result.parsed_quiz
-                _activate_quiz(topic.strip(), parsed["questions"])
-                st.success(f"Generated {len(parsed['questions'])} quiz questions.")
+                if not parsed:
+                    st.error("Parsed quiz payload was empty.")
+                    st.stop()
+                assert parsed is not None
+                questions = _quiz_questions(parsed)
+                if not questions:
+                    st.error("Parsed quiz payload did not contain valid questions.")
+                    st.stop()
+                _activate_quiz(topic.strip(), questions)
+                st.success(f"Generated {len(questions)} quiz questions.")
                 st.caption("This quiz is saved to your local quiz history for future reattempts.")
                 st.info("Quiz generation intentionally bypasses cache. Hint/feedback/explanations use cache.")
                 if grounding.enabled and grounding.require_citations:

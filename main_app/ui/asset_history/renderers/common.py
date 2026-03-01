@@ -4,6 +4,7 @@ import csv
 import io
 import json
 import re
+from typing import Any, cast
 
 import streamlit as st
 
@@ -14,21 +15,45 @@ from main_app.ui.asset_history.context import AssetHistoryRenderContext
 from main_app.ui.components import ReportRenderConfig, render_report_view
 
 
+def _as_payload_map(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): item for key, item in value.items()}
+
+
+def _as_dict_list(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    items: list[dict[str, Any]] = []
+    for item in value:
+        if isinstance(item, dict):
+            items.append({str(key): entry for key, entry in item.items()})
+    return items
+
+
+def _as_string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
 def render_topic_record(record: AssetHistoryRecord, context: AssetHistoryRenderContext) -> None:
     del context
-    payload = record.result_payload if isinstance(record.result_payload, dict) else {}
+    payload = _as_payload_map(record.result_payload)
+    artifact_raw = payload.get("artifact")
+    artifact = cast(dict[str, Any] | None, artifact_raw if isinstance(artifact_raw, dict) else None)
     st.subheader("Detailed Description")
     st.markdown(
         extract_topic_markdown(
             content=payload.get("content"),
             result_payload=payload,
-            artifact=payload.get("artifact") if isinstance(payload.get("artifact"), dict) else None,
+            artifact=artifact,
         )
     )
 
 
 def render_report_record(record: AssetHistoryRecord, context: AssetHistoryRenderContext) -> None:
-    payload = record.result_payload if isinstance(record.result_payload, dict) else {}
+    payload = _as_payload_map(record.result_payload)
     normalized_content = normalize_markdown_text(str(payload.get("content", "")))
     format_title = str(record.request_payload.get("format_title", "Report")).strip() or "Report"
     st.subheader("Generated Report")
@@ -50,10 +75,10 @@ def render_data_table_record(record: AssetHistoryRecord, context: AssetHistoryRe
     del context
     import pandas as pd
 
-    payload = record.result_payload if isinstance(record.result_payload, dict) else {}
-    columns = payload.get("columns", [])
-    rows = payload.get("rows", [])
-    if not isinstance(columns, list) or not isinstance(rows, list) or not rows:
+    payload = _as_payload_map(record.result_payload)
+    columns = _as_string_list(payload.get("columns", []))
+    rows = _as_dict_list(payload.get("rows", []))
+    if not columns or not rows:
         st.json(record.result_payload)
         return
 
@@ -93,7 +118,7 @@ def render_data_table_record(record: AssetHistoryRecord, context: AssetHistoryRe
 
 def render_default_record(record: AssetHistoryRecord, context: AssetHistoryRenderContext) -> None:
     del context
-    payload = record.result_payload if isinstance(record.result_payload, dict) else {}
+    payload = _as_payload_map(record.result_payload)
     artifact = payload.get("artifact")
     if isinstance(artifact, dict):
         provenance = artifact.get("provenance")
@@ -107,7 +132,8 @@ def render_default_record(record: AssetHistoryRecord, context: AssetHistoryRende
                     else:
                         st.error("Verification: failed")
                 issues = verification.get("issues")
-                if isinstance(issues, list) and issues:
+                issue_items = _as_dict_list(issues)
+                if issue_items:
                     st.caption("Verification issues")
                     st.table(
                         [
@@ -117,8 +143,7 @@ def render_default_record(record: AssetHistoryRecord, context: AssetHistoryRende
                                 "path": str(issue.get("path", "")),
                                 "message": str(issue.get("message", "")),
                             }
-                            for issue in issues
-                            if isinstance(issue, dict)
+                            for issue in issue_items
                         ]
                     )
         sections = artifact.get("sections")

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from main_app.shared.slideshow.representation_normalizer import normalize_representation_mode
+from main_app.contracts import AudioOverviewPayload, VideoPayload
 from main_app.models import GroqSettings, VideoGenerationResult
 from main_app.parsers.audio_overview_parser import AudioOverviewParser
 from main_app.services.asset_history_service import AssetHistoryService
@@ -218,7 +219,7 @@ class VideoAssetService:
             },
         }
         result = VideoGenerationResult(
-            video_payload=video_payload,
+            video_payload=cast(VideoPayload, video_payload),
             parse_error=None,
             parse_notes=parse_notes,
             cache_hits=cache_hits,
@@ -231,7 +232,7 @@ class VideoAssetService:
     def synthesize_audio(
         self,
         *,
-        video_payload: dict[str, Any],
+        video_payload: VideoPayload,
         language: str = "en",
         slow: bool = False,
     ) -> tuple[bytes | None, str | None]:
@@ -259,13 +260,16 @@ class VideoAssetService:
         if not dialogue:
             return None, "No dialogue content available in slide scripts."
 
-        overview_payload = {
+        overview_payload = cast(
+            AudioOverviewPayload,
+            {
             "topic": str(video_payload.get("topic", "")).strip(),
             "title": str(video_payload.get("title", "")).strip() or "Narrated Video Audio",
             "speakers": speakers if isinstance(speakers, list) else [],
             "dialogue": dialogue,
             "summary": "Narration track generated from slide scripts.",
-        }
+            },
+        )
         return self._audio_overview_service.synthesize_mp3(
             overview_payload=overview_payload,
             language=language,
@@ -276,7 +280,7 @@ class VideoAssetService:
         self,
         *,
         topic: str,
-        slide: dict[str, Any],
+        slide: Any,
         slide_index: int,
         total_slides: int,
         speaker_roster: list[dict[str, str]],

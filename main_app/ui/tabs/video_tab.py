@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal, cast
 
 import streamlit as st
 
+from main_app.contracts import VideoPayload
 from main_app.models import GroqSettings
 from main_app.services.background_jobs import BackgroundJobContext, BackgroundJobManager
 from main_app.services.cached_llm_service import CachedLLMService
@@ -19,7 +20,7 @@ from main_app.ui.components import (
 from main_app.ui.error_handling import UI_HANDLED_EXCEPTIONS, report_ui_error
 
 
-_VIDEO_DEFAULT_CODE_MODE = "auto"
+_VIDEO_DEFAULT_CODE_MODE: Literal["auto", "force", "none"] = "auto"
 _VIDEO_DEFAULT_REPRESENTATION_MODE = "visual"
 _VIDEO_DEFAULT_SPEAKER_COUNT = 2
 _VIDEO_DEFAULT_CONVERSATION_STYLE = "Educational Discussion"
@@ -266,7 +267,7 @@ def render_video_tab(
 
     render_video_view(
         topic=str(st.session_state.video_topic or payload.get("topic", "Video")).strip(),
-        video_payload=payload,
+        video_payload=cast(VideoPayload, payload),
         config=VideoRenderConfig(
             slideshow=SlideshowRenderConfig(
                 state_index_key="video_slideshow_index",

@@ -25,12 +25,14 @@ class AssetExecutionRuntimeContext:
 
 
 AssetExecutor = Callable[[IntentPayload, GroqSettings, AssetExecutionRuntimeContext], AgentAssetResult]
+LegacyAssetExecutor = Callable[[IntentPayload, GroqSettings], AgentAssetResult]
+AnyAssetExecutor = AssetExecutor | LegacyAssetExecutor
 
 
 @dataclass(frozen=True)
 class AssetExecutorRegistration:
     intent: str
-    executor: AssetExecutor
+    executor: AnyAssetExecutor
 
 
 @dataclass(frozen=True)
@@ -46,7 +48,7 @@ class AssetExecutorPluginContext:
     report_service: ReportService
 
 
-AssetExecutorFactory = Callable[[AssetExecutorPluginContext], AssetExecutor]
+AssetExecutorFactory = Callable[[AssetExecutorPluginContext], AnyAssetExecutor]
 
 
 @dataclass(frozen=True)

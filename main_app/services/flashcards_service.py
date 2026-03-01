@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
+from typing import cast
 
+from main_app.contracts import FlashcardsPayload
 from main_app.models import FlashcardsGenerationResult, GroqSettings
 from main_app.parsers.flashcards_parser import FlashcardsParser
 from main_app.services.asset_history_service import AssetHistoryService
@@ -72,7 +74,7 @@ class FlashcardsService:
 
         result = FlashcardsGenerationResult(
             raw_text=raw_text,
-            parsed_flashcards=parsed_flashcards,
+            parsed_flashcards=cast(FlashcardsPayload | None, parsed_flashcards),
             parse_error=parse_error,
             parse_note=parse_note,
             cache_hit=cache_hit,

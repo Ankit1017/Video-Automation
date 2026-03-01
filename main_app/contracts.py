@@ -140,6 +140,7 @@ class ToolExecutionPolicy(TypedDict, total=False):
     retry_backoff_ms: list[int]
     fail_policy: str
     concurrency_group: str | None
+    profile: str
 
 
 class ArtifactSchemaRef(TypedDict, total=False):

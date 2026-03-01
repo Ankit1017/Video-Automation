@@ -1,8 +1,16 @@
 from __future__ import annotations
 
-from main_app.contracts import IntentPayloadMap
+from typing import cast
+
+from main_app.contracts import IntentPayload, IntentPayloadMap
 from main_app.models import AgentPlan, GroqSettings
 from main_app.services.intent import IntentRouterService
+
+
+def _to_intent_payload(value: object) -> IntentPayload:
+    if not isinstance(value, dict):
+        return {}
+    return cast(IntentPayload, {str(key): item for key, item in value.items()})
 
 
 class AgentDashboardPlannerService:
@@ -73,7 +81,7 @@ class AgentDashboardPlannerService:
     ) -> tuple[AgentPlan, list[str], str | None, bool]:
         notes: list[str] = []
         cache_hit_any = False
-        payloads = {intent: dict(payload) for intent, payload in plan.payloads.items()}
+        payloads: IntentPayloadMap = {intent: _to_intent_payload(payload) for intent, payload in plan.payloads.items()}
 
         topic_value, topic_note, topic_error, topic_cache_hit = self._intent_router.extract_topic_from_message(
             message=user_reply,
@@ -110,7 +118,7 @@ class AgentDashboardPlannerService:
     ) -> tuple[AgentPlan, list[str], bool]:
         notes: list[str] = []
         cache_hit_any = False
-        payloads = {intent: dict(payload) for intent, payload in plan.payloads.items()}
+        payloads: IntentPayloadMap = {intent: _to_intent_payload(payload) for intent, payload in plan.payloads.items()}
 
         source_message = str(plan.source_message)
         for intent in plan.intents:
@@ -229,7 +237,7 @@ class AgentDashboardPlannerService:
         updated_count = 0
 
         for intent, payload in payloads.items():
-            next_payload = dict(payload)
+            next_payload = _to_intent_payload(payload)
             current_topic = " ".join(str(next_payload.get("topic", "")).split()).strip()
             should_override = is_followup_reference or not self._intent_router.is_valid_topic(current_topic)
             if should_override and current_topic.lower() != normalized_active_topic.lower():

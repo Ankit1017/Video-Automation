@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, cast
 
 from main_app.contracts import JSONValue, SlideRepresentation
 
@@ -25,6 +25,10 @@ _MAX_COUNTS: dict[str, int] = {
 }
 
 _PROGRESSIVE_REPRESENTATIONS: set[str] = {"bullet", "timeline", "process_flow"}
+
+
+def _json_list(value: list[Any]) -> list[JSONValue]:
+    return cast(list[JSONValue], value)
 
 
 def slide_representations_enabled() -> bool:
@@ -72,12 +76,12 @@ def normalize_slide_representation(slide: dict[str, Any]) -> tuple[dict[str, Any
     code_snippet = str(working.get("code_snippet", "")).strip()
     if code_snippet and representation != "bullet":
         representation = "bullet"
-        layout_payload = {"items": bullets[: _MAX_COUNTS["bullet"]]}
+        layout_payload = {"items": _json_list(bullets[: _MAX_COUNTS["bullet"]])}
         note = "Code snippet present; forced representation to `bullet`."
 
     if representation == "bullet":
         if not isinstance(layout_payload, dict) or not layout_payload.get("items"):
-            layout_payload = {"items": bullets[: _MAX_COUNTS["bullet"]]}
+            layout_payload = {"items": _json_list(bullets[: _MAX_COUNTS["bullet"]])}
 
     working["representation"] = representation
     working["layout_payload"] = layout_payload
@@ -92,9 +96,9 @@ def coerce_layout_payload(*, representation: str, layout_payload: Any) -> dict[s
     if normalized == "two_column":
         return {
             "left_title": _clean_text(payload.get("left_title")) or "Left",
-            "left_items": _clean_string_list(payload.get("left_items"), max_count=_MAX_COUNTS["two_column"]),
+            "left_items": _json_list(_clean_string_list(payload.get("left_items"), max_count=_MAX_COUNTS["two_column"])),
             "right_title": _clean_text(payload.get("right_title")) or "Right",
-            "right_items": _clean_string_list(payload.get("right_items"), max_count=_MAX_COUNTS["two_column"]),
+            "right_items": _json_list(_clean_string_list(payload.get("right_items"), max_count=_MAX_COUNTS["two_column"])),
         }
     if normalized == "timeline":
         events: list[dict[str, JSONValue]] = []
@@ -106,13 +110,13 @@ def coerce_layout_payload(*, representation: str, layout_payload: Any) -> dict[s
             if not label and not detail:
                 continue
             events.append({"label": label, "detail": detail})
-        return {"events": events}
+        return {"events": _json_list(events)}
     if normalized == "comparison":
         return {
             "left_title": _clean_text(payload.get("left_title")) or "Option A",
-            "left_points": _clean_string_list(payload.get("left_points"), max_count=_MAX_COUNTS["comparison"]),
+            "left_points": _json_list(_clean_string_list(payload.get("left_points"), max_count=_MAX_COUNTS["comparison"])),
             "right_title": _clean_text(payload.get("right_title")) or "Option B",
-            "right_points": _clean_string_list(payload.get("right_points"), max_count=_MAX_COUNTS["comparison"]),
+            "right_points": _json_list(_clean_string_list(payload.get("right_points"), max_count=_MAX_COUNTS["comparison"])),
         }
     if normalized == "process_flow":
         steps: list[dict[str, JSONValue]] = []
@@ -124,7 +128,7 @@ def coerce_layout_payload(*, representation: str, layout_payload: Any) -> dict[s
             if not title and not detail:
                 continue
             steps.append({"title": title or "Step", "detail": detail})
-        return {"steps": steps}
+        return {"steps": _json_list(steps)}
     if normalized == "metric_cards":
         cards: list[dict[str, JSONValue]] = []
         for card in _ensure_list(payload.get("cards"))[: _MAX_COUNTS["metric_cards"]]:
@@ -136,9 +140,9 @@ def coerce_layout_payload(*, representation: str, layout_payload: Any) -> dict[s
             if not label and not value and not context:
                 continue
             cards.append({"label": label, "value": value, "context": context})
-        return {"cards": cards}
+        return {"cards": _json_list(cards)}
     return {
-        "items": _clean_string_list(payload.get("items"), max_count=_MAX_COUNTS["bullet"]),
+        "items": _json_list(_clean_string_list(payload.get("items"), max_count=_MAX_COUNTS["bullet"])),
     }
 
 

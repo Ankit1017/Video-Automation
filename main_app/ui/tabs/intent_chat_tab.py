@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from html import escape
-from typing import Any
+from typing import Any, cast
 
 import streamlit as st
 
-from main_app.contracts import IntentPayloadMap
+from main_app.contracts import IntentPayload, IntentPayloadMap, RequirementFieldSpec
 from main_app.models import GroqSettings
 from main_app.services.cached_llm_service import CachedLLMService
 from main_app.services.intent import IntentRouterService
@@ -198,13 +198,14 @@ def render_intent_chat_tab(
         st.caption(f"Message: {bundle.get('message', '')}")
         st.caption(f"Mode: {bundle.get('planner_mode', IntentRouterService.MODE_LOCAL_FIRST)}")
 
-        intents: list[str] = bundle.get("intents", [])
-        payloads: IntentPayloadMap = bundle.get("payloads", {})
+        intents = [str(intent) for intent in bundle.get("intents", [])] if isinstance(bundle.get("intents"), list) else []
+        payloads_raw = bundle.get("payloads")
+        planner_payloads: IntentPayloadMap = cast(IntentPayloadMap, payloads_raw) if isinstance(payloads_raw, dict) else {}
 
         all_assets_ready = True
         for intent in intents:
             intent_slug = _intent_slug(intent)
-            payload = dict(payloads.get(intent, {}))
+            payload = _to_intent_payload(planner_payloads.get(intent, {}))
             missing_mandatory, missing_optional = intent_router_service.evaluate_requirements(intent=intent, payload=payload)
             optional_definitions = intent_router_service.optional_field_definitions(intent)
             intent_title = INTENT_DISPLAY_NAMES.get(intent, intent)
@@ -284,7 +285,7 @@ def render_intent_chat_tab(
                     else:
                         user_values: dict[str, Any] = {}
                         for field_name in missing_optional:
-                            meta = optional_definitions.get(field_name, {})
+                            meta = optional_definitions.get(field_name) or cast(RequirementFieldSpec, {})
                             user_values[field_name] = _render_optional_input_field(
                                 intent_slug=intent_slug,
                                 field_name=field_name,
@@ -295,7 +296,7 @@ def render_intent_chat_tab(
                             updated_payload = intent_router_service.apply_user_optionals(
                                 intent=intent,
                                 payload=payload,
-                                user_values=user_values,
+                                user_values=cast(IntentPayload, user_values),
                                 missing_optional=missing_optional,
                             )
                             st.session_state.intent_chat_requirements_bundle["payloads"][intent] = updated_payload
@@ -328,7 +329,7 @@ def render_intent_chat_tab(
             )
 
 
-def _render_optional_input_field(*, intent_slug: str, field_name: str, meta: dict[str, Any]) -> Any:
+def _render_optional_input_field(*, intent_slug: str, field_name: str, meta: RequirementFieldSpec) -> Any:
     field_label = str(meta.get("label", field_name)).strip() or field_name
     field_type = str(meta.get("type", "text")).strip().lower()
     widget_key = f"intent_manual_{intent_slug}_{field_name.replace(' ', '_')}"
@@ -373,3 +374,9 @@ def _render_optional_input_field(*, intent_slug: str, field_name: str, meta: dic
 
 def _intent_slug(intent: str) -> str:
     return "".join(ch if ch.isalnum() else "_" for ch in str(intent).lower()).strip("_")
+
+
+def _to_intent_payload(value: object) -> IntentPayload:
+    if not isinstance(value, dict):
+        return {}
+    return cast(IntentPayload, {str(key): item for key, item in value.items()})

@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import tempfile
 from time import perf_counter
+from typing import Any, cast
 
 from main_app.shared.slideshow.representation_normalizer import (
     is_progressive_representation,
@@ -135,7 +136,7 @@ class VideoExportService:
 
         audio_clip = None
         video_clip = None
-        all_visual_clips: list[object] = []
+        all_visual_clips: list[Any] = []
         render_root: Path | None = None
         try:
             render_root = self._create_render_workdir()
@@ -170,7 +171,7 @@ class VideoExportService:
                 all_visual_clips.extend(slide_clips)
 
             transition_sec = self._transition_seconds(animation_style=selected_animation_style)
-            stitched_clips: list[object] = []
+            stitched_clips: list[Any] = []
             for idx, clip in enumerate(all_visual_clips):
                 if idx > 0 and transition_sec > 0:
                     clip = clip.crossfadein(min(transition_sec, max(float(clip.duration), 0.0) / 2.0))
@@ -282,7 +283,7 @@ class VideoExportService:
                 self._cleanup_render_workdir(render_root)
 
     @staticmethod
-    def _ensure_pillow_resample_compat(*, image_module: object) -> None:
+    def _ensure_pillow_resample_compat(*, image_module: Any) -> None:
         # Pillow 10 removed Image.ANTIALIAS, but older moviepy versions still reference it.
         if hasattr(image_module, "ANTIALIAS"):
             return
@@ -301,22 +302,23 @@ class VideoExportService:
     def _build_slide_clips(
         self,
         *,
-        slide: SlideContent,
+        slide: SlideContent | dict[str, Any],
         topic: str,
         index: int,
         total: int,
         duration: float,
         path_prefix: Path,
-        image_module: object,
-        draw_module: object,
-        font_module: object,
-        image_clip_cls: object,
-        moviepy_vfx: object,
+        image_module: Any,
+        draw_module: Any,
+        font_module: Any,
+        image_clip_cls: Any,
+        moviepy_vfx: Any,
         template: _VideoTemplateStyle,
         animation_style: str,
-    ) -> list[object]:
-        clips: list[object] = []
-        normalized_slide, _ = normalize_slide_representation(slide if isinstance(slide, dict) else {})
+    ) -> list[Any]:
+        clips: list[Any] = []
+        slide_map = cast(dict[str, Any], slide if isinstance(slide, dict) else {})
+        normalized_slide, _ = normalize_slide_representation(slide_map)
         has_code = bool(
             sanitize_text(normalized_slide.get("code_snippet", ""), keep_citations=False, preserve_newlines=True)
         )
@@ -374,12 +376,13 @@ class VideoExportService:
         return clips
 
     @staticmethod
-    def _should_use_progressive_reveal(*, slide: SlideContent, animation_style: str) -> bool:
-        normalized_slide, _ = normalize_slide_representation(slide if isinstance(slide, dict) else {})
+    def _should_use_progressive_reveal(*, slide: SlideContent | dict[str, Any], animation_style: str) -> bool:
+        slide_map = cast(dict[str, Any], slide if isinstance(slide, dict) else {})
+        normalized_slide, _ = normalize_slide_representation(slide_map)
         representation = " ".join(str(normalized_slide.get("representation", "bullet")).split()).strip().lower()
         return animation_style == "youtube_dynamic" and is_progressive_representation(representation)
 
-    def _apply_motion(self, *, clip: object, duration: float, animation_style: str, moviepy_vfx: object) -> object:
+    def _apply_motion(self, *, clip: Any, duration: float, animation_style: str, moviepy_vfx: Any) -> Any:
         if animation_style == "none":
             return clip
 
@@ -402,7 +405,7 @@ class VideoExportService:
         return animated
 
     @staticmethod
-    def _reveal_steps(*, slide: SlideContent) -> list[int]:
+    def _reveal_steps(*, slide: SlideContent | dict[str, Any]) -> list[int]:
         representation = " ".join(str(slide.get("representation", "bullet")).split()).strip().lower()
         layout_payload = slide.get("layout_payload", {})
         payload = layout_payload if isinstance(layout_payload, dict) else {}
@@ -410,8 +413,8 @@ class VideoExportService:
             events = payload.get("events", [])
             bullet_count = len(events) if isinstance(events, list) else 0
         elif representation == "process_flow":
-            steps = payload.get("steps", [])
-            bullet_count = len(steps) if isinstance(steps, list) else 0
+            step_items = payload.get("steps", [])
+            bullet_count = len(step_items) if isinstance(step_items, list) else 0
         else:
             bullets = slide.get("bullets", [])
             bullet_count = len(bullets) if isinstance(bullets, list) else 0
@@ -420,9 +423,9 @@ class VideoExportService:
         if bullet_count == 2:
             return [1, 2]
         near_full = max(2, bullet_count - 1)
-        steps = [1, near_full, bullet_count]
+        reveal_steps = [1, near_full, bullet_count]
         deduped: list[int] = []
-        for value in steps:
+        for value in reveal_steps:
             if value not in deduped:
                 deduped.append(value)
         return deduped
@@ -450,7 +453,7 @@ class VideoExportService:
         self,
         *,
         slides: list[SlideContent],
-        slide_scripts: object,
+        slide_scripts: Any,
         audio_duration: float,
     ) -> list[float]:
         raw_hints = self._duration_hints_from_scripts(slides=slides, slide_scripts=slide_scripts)
@@ -471,7 +474,7 @@ class VideoExportService:
         return durations
 
     @staticmethod
-    def _duration_hints_from_scripts(*, slides: list[SlideContent], slide_scripts: object) -> list[float]:
+    def _duration_hints_from_scripts(*, slides: list[SlideContent], slide_scripts: Any) -> list[float]:
         scripts = slide_scripts if isinstance(slide_scripts, list) else []
         hints: list[float] = []
         by_index: dict[int, float] = {}
@@ -517,14 +520,14 @@ class VideoExportService:
     def _render_slide_image(
         self,
         *,
-        slide: SlideContent,
+        slide: dict[str, Any],
         topic: str,
         index: int,
         total: int,
         path: Path,
-        image_module: object,
-        draw_module: object,
-        font_module: object,
+        image_module: Any,
+        draw_module: Any,
+        font_module: Any,
         template: _VideoTemplateStyle,
         revealed_bullets: int | None,
         code_emphasis: bool,
@@ -630,12 +633,12 @@ class VideoExportService:
     def _draw_representation_body(
         self,
         *,
-        draw: object,
-        slide: SlideContent,
+        draw: Any,
+        slide: dict[str, Any],
         start_y: int,
-        bullet_font: object,
+        bullet_font: Any,
         bullet_size: int,
-        meta_font: object,
+        meta_font: Any,
         template: _VideoTemplateStyle,
         revealed_bullets: int | None,
     ) -> int:
@@ -828,12 +831,12 @@ class VideoExportService:
     def _draw_bullet_lines(
         self,
         *,
-        draw: object,
+        draw: Any,
         items: list[str],
         x: int,
         y: int,
         max_width: int,
-        bullet_font: object,
+        bullet_font: Any,
         bullet_size: int,
         color: tuple[int, int, int],
     ) -> int:
@@ -856,7 +859,7 @@ class VideoExportService:
         return line_y
 
     @staticmethod
-    def _as_text_list(value: object, *, max_items: int) -> list[str]:
+    def _as_text_list(value: Any, *, max_items: int) -> list[str]:
         if not isinstance(value, list):
             return []
         cleaned: list[str] = []
@@ -872,8 +875,8 @@ class VideoExportService:
     @staticmethod
     def _draw_gradient_background(
         *,
-        image: object,
-        image_module: object,
+        image: Any,
+        image_module: Any,
         top: tuple[int, int, int],
         bottom: tuple[int, int, int],
     ) -> None:
@@ -987,7 +990,7 @@ class VideoExportService:
     def _load_font(
         cls,
         *,
-        font_module: object,
+        font_module: Any,
         preferred_size: int,
         bold: bool,
         mono: bool,
@@ -1005,7 +1008,7 @@ class VideoExportService:
         return font_module.load_default(), int(min_size)
 
     @staticmethod
-    def _measure_text(*, draw: object, text: str, font: object) -> tuple[int, int]:
+    def _measure_text(*, draw: Any, text: str, font: Any) -> tuple[int, int]:
         try:
             left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
             return max(1, right - left), max(1, bottom - top)
@@ -1014,12 +1017,12 @@ class VideoExportService:
             return max(1, int(width)), max(1, int(height))
 
     @classmethod
-    def _line_height(cls, *, draw: object, font: object, text: str = "Ag") -> int:
+    def _line_height(cls, *, draw: Any, font: Any, text: str = "Ag") -> int:
         _, height = cls._measure_text(draw=draw, text=text, font=font)
         return max(1, int(height))
 
     @classmethod
-    def _wrap_text_to_width(cls, *, draw: object, text: str, font: object, max_width: int) -> list[str]:
+    def _wrap_text_to_width(cls, *, draw: Any, text: str, font: Any, max_width: int) -> list[str]:
         words = [item for item in str(text).split() if item]
         if not words:
             return []
@@ -1041,9 +1044,9 @@ class VideoExportService:
     def _fit_wrapped_lines(
         cls,
         *,
-        draw: object,
+        draw: Any,
         text: str,
-        font_module: object,
+        font_module: Any,
         preferred_size: int,
         min_size: int,
         max_width: int,

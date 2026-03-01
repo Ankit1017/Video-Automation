@@ -234,8 +234,9 @@ class SlideShowParser:
         if schema_error:
             return None, None
 
+        normalized_count = len(normalized) if isinstance(normalized, list) else 0
         recovery_note = (
-            f"Section JSON was truncated; recovered {len(normalized)} complete slide(s) "
+            f"Section JSON was truncated; recovered {normalized_count} complete slide(s) "
             "from partial model output."
         )
         note = self._merge_parse_notes(recovery_note, normalize_note)
@@ -294,14 +295,14 @@ class SlideShowParser:
         subtopics: list[dict[str, str]] = []
         for item in raw_subtopics:
             if isinstance(item, str):
-                title = " ".join(item.split()).strip()
-                if title:
-                    subtopics.append({"title": title, "focus": ""})
+                normalized_title = " ".join(item.split()).strip()
+                if normalized_title:
+                    subtopics.append({"title": normalized_title, "focus": ""})
             elif isinstance(item, dict):
-                title = item.get("title") or item.get("name") or item.get("subtopic")
-                focus = item.get("focus") or item.get("goal") or item.get("description") or ""
-                title_text = " ".join(str(title).split()).strip() if title is not None else ""
-                focus_text = " ".join(str(focus).split()).strip() if focus is not None else ""
+                raw_title = item.get("title") or item.get("name") or item.get("subtopic")
+                raw_focus = item.get("focus") or item.get("goal") or item.get("description") or ""
+                title_text = " ".join(str(raw_title).split()).strip() if raw_title is not None else ""
+                focus_text = " ".join(str(raw_focus).split()).strip() if raw_focus is not None else ""
                 if title_text:
                     subtopics.append({"title": title_text, "focus": focus_text})
 

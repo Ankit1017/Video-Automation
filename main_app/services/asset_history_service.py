@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
+from main_app.contracts import IntentPayload
 from main_app.infrastructure.asset_history_store import AssetHistoryRepository
 from main_app.models import AssetHistoryRecord
 
@@ -40,7 +41,7 @@ class AssetHistoryService:
                 title=self._clean_text(title),
                 created_at=created_at,
                 model=self._clean_text(model),
-                request_payload=self._safe_dict(request_payload),
+                request_payload=cast(IntentPayload, self._safe_dict(request_payload)),
                 result_payload=self._json_safe(self._with_operational_defaults(result_payload)),
                 status=self._normalize_status(status),
                 cache_hit=bool(cache_hit),

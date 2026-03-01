@@ -277,7 +277,7 @@ def _render_representation_html(slide: dict[str, Any]) -> str:
         events = payload.get("events", [])
         if not isinstance(events, list):
             events = []
-        blocks: list[str] = []
+        timeline_blocks: list[str] = []
         for event in events:
             if not isinstance(event, dict):
                 continue
@@ -285,58 +285,58 @@ def _render_representation_html(slide: dict[str, Any]) -> str:
             detail = escape(str(event.get("detail", "")))
             if not label and not detail:
                 continue
-            blocks.append(
+            timeline_blocks.append(
                 '<div class="ss-timeline-item">'
                 f'<div class="ss-timeline-label">{label or "Milestone"}</div>'
                 f'<div class="ss-timeline-detail">{detail}</div>'
                 "</div>"
             )
-        if not blocks:
+        if not timeline_blocks:
             return _render_list_html(slide.get("bullets", []), css_class="ss-bullets")
-        return '<div class="ss-timeline">' + "".join(blocks) + "</div>"
+        return '<div class="ss-timeline">' + "".join(timeline_blocks) + "</div>"
 
     if representation == "process_flow":
         steps = payload.get("steps", [])
         if not isinstance(steps, list):
             steps = []
-        blocks: list[str] = []
+        flow_blocks: list[str] = []
         for idx, step in enumerate(steps, start=1):
             if not isinstance(step, dict):
                 continue
             title = escape(str(step.get("title", f"Step {idx}")))
             detail = escape(str(step.get("detail", "")))
-            blocks.append(
+            flow_blocks.append(
                 '<div class="ss-flow-step">'
                 f'<div class="ss-flow-index">{idx}</div>'
                 f'<div class="ss-flow-title">{title}</div>'
                 f'<div class="ss-flow-detail">{detail}</div>'
                 "</div>"
             )
-        if not blocks:
+        if not flow_blocks:
             return _render_list_html(slide.get("bullets", []), css_class="ss-bullets")
-        return '<div class="ss-flow">' + "".join(blocks) + "</div>"
+        return '<div class="ss-flow">' + "".join(flow_blocks) + "</div>"
 
     if representation == "metric_cards":
         cards = payload.get("cards", [])
         if not isinstance(cards, list):
             cards = []
-        blocks: list[str] = []
+        metric_blocks: list[str] = []
         for card in cards:
             if not isinstance(card, dict):
                 continue
             label = escape(str(card.get("label", "")))
             value = escape(str(card.get("value", "")))
             context = escape(str(card.get("context", "")))
-            blocks.append(
+            metric_blocks.append(
                 '<div class="ss-metric-card">'
                 f'<div class="ss-metric-label">{label}</div>'
                 f'<div class="ss-metric-value">{value}</div>'
                 f'<div class="ss-metric-context">{context}</div>'
                 "</div>"
             )
-        if not blocks:
+        if not metric_blocks:
             return _render_list_html(slide.get("bullets", []), css_class="ss-bullets")
-        return '<div class="ss-metric-grid">' + "".join(blocks) + "</div>"
+        return '<div class="ss-metric-grid">' + "".join(metric_blocks) + "</div>"
 
     return _render_list_html(slide.get("bullets", []), css_class="ss-bullets")
 

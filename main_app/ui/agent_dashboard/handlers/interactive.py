@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 from main_app.contracts import IntentPayload
+from main_app.contracts import VideoPayload
 from main_app.ui.agent_dashboard.context import AgentAssetRenderContext
 from main_app.ui.agent_dashboard.handlers.types import AgentAsset
 from main_app.ui.components.interactive_callbacks import (
@@ -22,6 +25,18 @@ from main_app.ui.components import (
 )
 
 
+def _dict_list(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _as_video_payload(value: object) -> VideoPayload:
+    if not isinstance(value, dict):
+        return {}
+    return cast(VideoPayload, value)
+
+
 def render_flashcards_asset(
     context: AgentAssetRenderContext,
     scope: str,
@@ -30,7 +45,7 @@ def render_flashcards_asset(
     asset: AgentAsset,
 ) -> None:
     del asset
-    cards = (content or {}).get("cards", []) if isinstance(content, dict) else []
+    cards = _dict_list((content or {}).get("cards", []) if isinstance(content, dict) else [])
     topic = first_non_empty_topic(
         payload.get("topic", ""),
         (content or {}).get("topic", "") if isinstance(content, dict) else "",
@@ -69,7 +84,7 @@ def render_quiz_asset(
     asset: AgentAsset,
 ) -> None:
     del asset
-    questions_raw = (content or {}).get("questions", []) if isinstance(content, dict) else []
+    questions_raw = _dict_list((content or {}).get("questions", []) if isinstance(content, dict) else [])
     topic = first_non_empty_topic(
         payload.get("topic", ""),
         (content or {}).get("topic", "") if isinstance(content, dict) else "",
@@ -112,7 +127,7 @@ def render_slideshow_asset(
     asset: AgentAsset,
 ) -> None:
     del asset
-    slides = (content or {}).get("slides", []) if isinstance(content, dict) else []
+    slides = _dict_list((content or {}).get("slides", []) if isinstance(content, dict) else [])
     topic = str(payload.get("topic", "")).strip() or "Slideshow"
     render_slideshow_view(
         topic=topic,
@@ -142,7 +157,7 @@ def render_video_asset(
     asset: AgentAsset,
 ) -> None:
     topic = str(payload.get("topic", "")).strip() or "Video"
-    video_payload = content if isinstance(content, dict) else {}
+    video_payload = _as_video_payload(content)
     render_video_view(
         topic=topic,
         video_payload=video_payload,

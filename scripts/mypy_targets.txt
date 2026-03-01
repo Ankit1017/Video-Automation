@@ -1,0 +1,7 @@
+# Mypy ratchet targets
+# Keep this list green at all times. Add modules batch-by-batch as debt is reduced.
+
+main_app/services/telemetry_service.py
+main_app/services/report_export/markdown_renderer.py
+main_app/ui/tabs/additional_settings_tab.py
+main_app/services/cached_llm_service.py

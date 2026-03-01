@@ -2,47 +2,47 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
-from main_app.contracts import RunLedgerRecord
+from main_app.contracts import AssetRunSummary, RunLedgerRecord
 from main_app.services.agent_dashboard.runtime_config import run_ledger_retention_days
 
 
 class RunLedgerRepository(Protocol):
-    def list_records(self) -> list[dict[str, Any]]:
+    def list_records(self) -> list[RunLedgerRecord]:
         ...
 
-    def upsert_record(self, record_entry: dict[str, Any]) -> None:
+    def upsert_record(self, record_entry: RunLedgerRecord) -> None:
         ...
 
-    def save_records(self, records: list[dict[str, Any]]) -> None:
+    def save_records(self, records: list[RunLedgerRecord]) -> None:
         ...
 
 
 @dataclass
 class InMemoryRunLedgerStore:
-    _records: dict[str, dict[str, Any]]
+    _records: dict[str, RunLedgerRecord]
 
     def __init__(self) -> None:
         self._records = {}
 
-    def list_records(self) -> list[dict[str, Any]]:
+    def list_records(self) -> list[RunLedgerRecord]:
         return sorted(self._records.values(), key=lambda item: str(item.get("started_at", "")), reverse=True)
 
-    def upsert_record(self, record_entry: dict[str, Any]) -> None:
+    def upsert_record(self, record_entry: RunLedgerRecord) -> None:
         run_id = " ".join(str(record_entry.get("run_id", "")).split()).strip()
         if not run_id:
             return
-        self._records[run_id] = dict(record_entry)
+        self._records[run_id] = cast(RunLedgerRecord, dict(record_entry))
 
-    def save_records(self, records: list[dict[str, Any]]) -> None:
+    def save_records(self, records: list[RunLedgerRecord]) -> None:
         self._records = {}
         for record in records:
             if not isinstance(record, dict):
                 continue
             run_id = " ".join(str(record.get("run_id", "")).split()).strip()
             if run_id:
-                self._records[run_id] = dict(record)
+                self._records[run_id] = cast(RunLedgerRecord, dict(record))
 
 
 class RunLedgerService:
@@ -89,7 +89,7 @@ class RunLedgerService:
     def _apply_retention(self) -> None:
         retention_days = run_ledger_retention_days()
         cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-        retained: list[dict[str, Any]] = []
+        retained: list[RunLedgerRecord] = []
         for record in self._store.list_records():
             if not isinstance(record, dict):
                 continue
@@ -100,9 +100,14 @@ class RunLedgerService:
         self._store.save_records(retained)
 
     @staticmethod
-    def _normalize_record(record: dict[str, Any]) -> RunLedgerRecord:
+    def _normalize_record(record: RunLedgerRecord | dict[str, Any]) -> RunLedgerRecord:
         tool_summaries_raw = record.get("tool_summaries")
         error_counts_raw = record.get("error_counts")
+        tool_summaries: list[AssetRunSummary] = []
+        if isinstance(tool_summaries_raw, list):
+            for item in tool_summaries_raw:
+                if isinstance(item, dict):
+                    tool_summaries.append(cast(AssetRunSummary, item))
         return {
             "run_id": " ".join(str(record.get("run_id", "")).split()).strip(),
             "workflow_key": " ".join(str(record.get("workflow_key", "")).split()).strip(),
@@ -110,7 +115,7 @@ class RunLedgerService:
             "status": " ".join(str(record.get("status", "")).split()).strip().lower(),
             "started_at": " ".join(str(record.get("started_at", "")).split()).strip(),
             "ended_at": " ".join(str(record.get("ended_at", "")).split()).strip(),
-            "tool_summaries": [item for item in tool_summaries_raw if isinstance(item, dict)] if isinstance(tool_summaries_raw, list) else [],
+            "tool_summaries": tool_summaries,
             "error_counts": {
                 str(key): int(value)
                 for key, value in (error_counts_raw.items() if isinstance(error_counts_raw, dict) else [])

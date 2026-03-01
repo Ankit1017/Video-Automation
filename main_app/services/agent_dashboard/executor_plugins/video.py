@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from main_app.contracts import IntentPayload
 from main_app.models import AgentAssetResult, GroqSettings
 from main_app.services.agent_dashboard.executor_types import (
     AssetExecutor,
+    AssetExecutionRuntimeContext,
     AssetExecutorPlugin,
     AssetExecutorPluginContext,
 )
@@ -14,7 +17,12 @@ from main_app.services.agent_dashboard.executor_plugins.parsed_asset_result impo
 
 
 def _build_executor(context: AssetExecutorPluginContext) -> AssetExecutor:
-    def _execute(payload: IntentPayload, settings: GroqSettings) -> AgentAssetResult:
+    def _execute(
+        payload: IntentPayload,
+        settings: GroqSettings,
+        runtime_context: AssetExecutionRuntimeContext,
+    ) -> AgentAssetResult:
+        _ = runtime_context
         topic = str(payload.get("topic", ""))
         if context.video_service is None:
             return build_error_asset_result(
@@ -22,13 +30,19 @@ def _build_executor(context: AssetExecutorPluginContext) -> AssetExecutor:
                 error="Video service is not configured.",
                 payload=payload,
             )
+        raw_code_mode = " ".join(str(payload.get("code_mode", "auto")).split()).strip().lower()
+        code_mode: Literal["auto", "force", "none"] = "auto"
+        if raw_code_mode == "force":
+            code_mode = "force"
+        elif raw_code_mode == "none":
+            code_mode = "none"
 
         result = context.video_service.generate(
             topic=topic,
             constraints=str(payload.get("constraints", "")),
             subtopic_count=int(payload.get("subtopic_count", 5)),
             slides_per_subtopic=int(payload.get("slides_per_subtopic", 2)),
-            code_mode=str(payload.get("code_mode", "auto")),
+            code_mode=code_mode,
             speaker_count=int(payload.get("speaker_count", 2)),
             conversation_style=str(payload.get("conversation_style", "Educational Discussion")),
             video_template=str(payload.get("video_template", "standard")),

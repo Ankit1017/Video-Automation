@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 import hashlib
 import json
 import time
-from typing import Any
+from typing import Any, Iterator
 
 from main_app.infrastructure.cache_store import CacheStore
 from main_app.infrastructure.groq_client import (
@@ -399,10 +400,6 @@ def _now_iso() -> str:
     from datetime import datetime, timezone
 
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
-from contextlib import contextmanager
-from typing import Iterator
 
 
 @contextmanager

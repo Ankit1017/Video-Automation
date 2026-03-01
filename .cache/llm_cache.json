@@ -3756,5 +3756,17 @@
       "completion_tokens": 926,
       "total_tokens": 1065
     }
+  },
+  "7fec6256f1d30451f85fae68d9c804e4a180e5a6b397bdb5890acc8f027b4054": {
+    "response": "{\n  \"name\": \"Machine Learning\",\n  \"children\": [\n    {\n      \"name\": \"Healthcare Applications\",\n      \"children\": [\n        {\"name\": \"Disease Diagnosis\", \"children\": [\"Clinical Decision Support\", \"Predictive Modeling\"]},\n        {\"name\": \"Personalized Medicine\", \"children\": [\"Genomic Analysis\", \"Pharmacogenomics\"]},\n        {\"name\": \"Patient Outcomes\", \"children\": [\"Risk Stratification\", \"Treatment Response\"]}\n      ]\n    },\n    {\n      \"name\": \"Deep Learning Techniques\",\n      \"children\": [\n        {\"name\": \"Convolutional Neural Networks\", \"children\": [\"Image Segmentation\", \"Object Detection\"]},\n        {\"name\": \"Recurrent Neural Networks\", \"children\": [\"Time Series Analysis\", \"Natural Language Processing\"]},\n        {\"name\": \"Autoencoders\", \"children\": [\"Dimensionality Reduction\", \"Anomaly Detection\"]}\n      ]\n    },\n    {\n      \"name\": \"Data Preprocessing\",\n      \"children\": [\n        {\"name\": \"Data Cleaning\", \"children\": [\"Handling Missing Values\", \"Data Normalization\"]},\n        {\"name\": \"Feature Engineering\", \"children\": [\"Dimensionality Reduction\", \"Feature Scaling\"]},\n        {\"name\": \"Data Visualization\", \"children\": [\"Heatmaps\", \"Scatter Plots\"]}\n      ]\n    },\n    {\n      \"name\": \"Ethics and Challenges\",\n      \"children\": [\n        {\"name\": \"Bias and Fairness\", \"children\": [\"Data Bias\", \"Algorithmic Fairness\"]},\n        {\"name\": \"Privacy and Security\", \"children\": [\"Data Anonymization\", \"Secure Data Sharing\"]},\n        {\"name\": \"Regulatory Frameworks\", \"children\": [\"HIPAA\", \"GDPR\"]}\n      ]\n    }\n  ]\n}",
+    "topic": "Machine learning",
+    "model": "llama-3.1-8b-instant",
+    "task": "mindmap_graph",
+    "label": "MindMap Graph: Machine learning",
+    "usage": {
+      "prompt_tokens": 185,
+      "completion_tokens": 370,
+      "total_tokens": 555
+    }
   }
 }

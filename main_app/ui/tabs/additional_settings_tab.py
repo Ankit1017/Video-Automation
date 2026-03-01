@@ -173,7 +173,8 @@ def _render_group_form_editor(
         widget_key = f"additional_form_{group_slug}_{_slugify(key)}"
 
         if key == "enabled_tab_titles":
-            selected_titles = current_value if isinstance(current_value, list) else default_value
+            raw_titles = current_value if isinstance(current_value, list) else default_value
+            selected_titles = [str(title) for title in raw_titles] if isinstance(raw_titles, list) else []
             parsed_group[key] = st.multiselect(
                 field_label,
                 options=TAB_TITLES,

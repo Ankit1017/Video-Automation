@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from html import escape
-from typing import Any
+from typing import Any, cast
 
 import streamlit as st
 
@@ -14,6 +14,12 @@ from main_app.ui.agent_dashboard.render_handlers import (
     build_default_render_handlers,
     render_unknown_asset,
 )
+
+
+def _as_intent_payload(value: object) -> IntentPayload:
+    if not isinstance(value, dict):
+        return {}
+    return cast(IntentPayload, {str(key): item for key, item in value.items()})
 
 
 class AgentAssetRenderer:
@@ -59,8 +65,7 @@ class AgentAssetRenderer:
                 if parse_note:
                     st.caption(parse_note)
 
-                payload_raw = asset.get("payload") if isinstance(asset.get("payload"), dict) else {}
-                payload: IntentPayload = dict(payload_raw)
+                payload = _as_intent_payload(asset.get("payload"))
                 content = asset.get("content")
                 normalized_intent = normalize_intent(intent)
                 render_handler = self._render_handlers.get(normalized_intent, render_unknown_asset)

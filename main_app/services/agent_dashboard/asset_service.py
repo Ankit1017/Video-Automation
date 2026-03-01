@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import hashlib
 import json
 from time import perf_counter
-from typing import Callable
+from typing import Callable, ContextManager, Iterator
 from uuid import uuid4
 
 from main_app.contracts import (
     ArtifactMap,
     AssetRunSummary,
+    IntentPayload,
     OrchestrationState,
     RunLedgerRecord,
     SimulationNodeResult,
@@ -23,25 +23,26 @@ from main_app.contracts import (
 from main_app.models import AgentAssetResult, AgentPlan, GroqSettings
 from main_app.services.agent_dashboard.artifact_adapter import collect_produced_artifacts
 from main_app.services.agent_dashboard.asset_executor_registry import AgentAssetExecutorRegistry
+from main_app.services.agent_dashboard.dependency_graph_service import AgentDependencyGraphService
 from main_app.services.agent_dashboard.executor_types import AssetExecutionRuntimeContext
 from main_app.services.agent_dashboard.error_codes import (
-    E_DEDUP_SIGNATURE_INVALID,
     E_PARALLEL_SCHEDULER_FAILURE,
-    E_RUN_LEDGER_WRITE_FAILED,
     E_SIMULATION_INVALID_PLAN,
     E_STATE_TRANSITION_INVALID,
     E_WORKFLOW_CYCLE,
 )
 from main_app.services.agent_dashboard.orchestration_state_service import OrchestrationStateService
 from main_app.services.agent_dashboard.run_ledger_service import RunLedgerService
+from main_app.services.agent_dashboard.run_recording_service import AgentRunRecordingService
 from main_app.services.agent_dashboard.stage_ledger_service import StageLedgerService
 from main_app.services.agent_dashboard.runtime_config import (
     enable_parallel_dag,
-    execution_dedup_enabled,
     max_parallel_tools,
     use_generic_asset_flow,
     workflow_fail_policy,
 )
+from main_app.services.agent_dashboard.tool_run_service import AgentToolRunService
+from main_app.services.agent_dashboard.workflow_execution_service import AgentWorkflowExecutionService
 from main_app.services.agent_dashboard.tool_registry import (
     AgentToolDefinition,
     AgentToolRegistry,
@@ -85,6 +86,10 @@ class AgentDashboardAssetService:
         on_stage_event: Callable[[StageDiagnostic], None] | None = None,
         on_run_event: Callable[[RunLedgerRecord], None] | None = None,
         telemetry_service: TelemetryService | None = None,
+        dependency_graph_service: AgentDependencyGraphService | None = None,
+        tool_run_service: AgentToolRunService | None = None,
+        run_recording_service: AgentRunRecordingService | None = None,
+        workflow_execution_service: AgentWorkflowExecutionService | None = None,
     ) -> None:
         self._intent_router = intent_router
         self._asset_executor_registry = asset_executor_registry
@@ -103,6 +108,22 @@ class AgentDashboardAssetService:
         self._on_stage_event = on_stage_event
         self._on_run_event = on_run_event
         self._telemetry_service = telemetry_service
+        self._dependency_graph_service = dependency_graph_service or AgentDependencyGraphService()
+        self._tool_run_service = tool_run_service or AgentToolRunService(
+            intent_router=self._intent_router,
+            executor_registry=self._asset_executor_registry,
+            tool_stage_orchestrator=self._tool_stage_orchestrator,
+        )
+        self._run_recording_service = run_recording_service or AgentRunRecordingService(
+            run_ledger_service=self._run_ledger_service,
+            stage_ledger_service=self._stage_ledger_service,
+            telemetry_service=self._telemetry_service,
+            on_stage_event=self._on_stage_event,
+            on_run_event=self._on_run_event,
+        )
+        self._workflow_execution_service = workflow_execution_service or AgentWorkflowExecutionService(
+            orchestration_state_service=self._orchestration_state_service
+        )
 
     def generate_assets_from_plan(
         self,
@@ -303,27 +324,19 @@ class AgentDashboardAssetService:
         parallel_enabled = enable_parallel_dag() and max_parallel_tools() > 1
         parallel_limit = max_parallel_tools()
 
-        context_scope = (
+        context_scope: ContextManager[object] = (
             self._telemetry_service.context_scope(request_id=request_id, run_id=run_id_value)
             if self._telemetry_service is not None
-            else None
+            else _null_context()
         )
-        if context_scope is None:
-            context_scope = _null_context()
         with context_scope:
             while pending:
-                ready = [
-                    key
-                    for key in pending
-                    if all(parent in completed for parent in dependencies.get(key, []))
-                ]
-                for key in ready:
-                    transition = self._orchestration_state_service.transition(
-                        from_state=tool_states.get(key, "pending"),
-                        to_state="ready",
-                    )
-                    if transition.valid:
-                        tool_states[key] = "ready"
+                ready = self._workflow_execution_service.resolve_ready_tools(
+                    pending=pending,
+                    completed=completed,
+                    dependencies=dependencies,
+                    tool_states=tool_states,
+                )
                 ready.sort(key=lambda key: (order_index.get(key, 9999), key))
                 if not ready:
                     notes.append(f"[{E_PARALLEL_SCHEDULER_FAILURE}] No schedulable tools remain.")
@@ -335,14 +348,9 @@ class AgentDashboardAssetService:
                     selected = ready[:parallel_limit]
 
                 for key in selected:
-                    run_transition = self._orchestration_state_service.transition(
-                        from_state=tool_states.get(key, "ready"),
-                        to_state="running",
-                    )
-                    if run_transition.valid:
-                        tool_states[key] = "running"
-                    else:
-                        notes.append(f"[{E_STATE_TRANSITION_INVALID}] {run_transition.message}")
+                    transition_error = self._workflow_execution_service.mark_running(tool_key=key, tool_states=tool_states)
+                    if transition_error:
+                        notes.append(f"[{E_STATE_TRANSITION_INVALID}] {transition_error}")
 
                 batch_results: dict[str, tuple[AgentAssetResult, list[ToolStageResult]]] = {}
                 if len(selected) == 1:
@@ -385,14 +393,13 @@ class AgentDashboardAssetService:
                     completed.add(key)
                     tool = key_to_tool[key]
                     asset, stage_results = batch_results[key]
-                    finish_transition = self._orchestration_state_service.transition(
-                        from_state=tool_states.get(key, "running"),
-                        to_state="completed" if asset.status == "success" else "failed",
+                    transition_error = self._workflow_execution_service.mark_finished(
+                        tool_key=key,
+                        success=(asset.status == "success"),
+                        tool_states=tool_states,
                     )
-                    if finish_transition.valid:
-                        tool_states[key] = "completed" if asset.status == "success" else "failed"
-                    else:
-                        notes.append(f"[{E_STATE_TRANSITION_INVALID}] {finish_transition.message}")
+                    if transition_error:
+                        notes.append(f"[{E_STATE_TRANSITION_INVALID}] {transition_error}")
                     results_by_key[key] = (asset, stage_results)
                     assets.append(asset)
                     self._append_stage_notes(notes=notes, intent=tool.intent, stage_results=stage_results)
@@ -555,7 +562,7 @@ class AgentDashboardAssetService:
         self,
         *,
         tool: AgentToolDefinition,
-        payload: dict[str, object],
+        payload: IntentPayload,
         settings: GroqSettings,
         runtime_context: AssetExecutionRuntimeContext | None,
         available_artifacts: ArtifactMap,
@@ -564,43 +571,17 @@ class AgentDashboardAssetService:
         on_stage_event: Callable[[StageExecutionRecord], None] | None,
         executed_signatures: set[str],
     ) -> tuple[AgentAssetResult, list[ToolStageResult]]:
-        signature_error = ""
-        run_signature = self._tool_run_signature(
-            tool=tool,
-            payload=payload,
-            available_artifacts=available_artifacts,
-        )
-        if not run_signature:
-            signature_error = E_DEDUP_SIGNATURE_INVALID
-        if execution_dedup_enabled() and run_signature and run_signature in executed_signatures:
-            return (
-                AgentAssetResult(
-                    intent=tool.intent,
-                    status="error",
-                    payload=payload,
-                    error="Skipped duplicate execution in same run.",
-                ),
-                [],
-            )
-        if run_signature:
-            executed_signatures.add(run_signature)
-
-        asset, stage_results = self._tool_stage_orchestrator.execute_tool(
+        return self._tool_run_service.run_tool(
             tool=tool,
             payload=payload,
             settings=settings,
-            runtime_context=runtime_context or AssetExecutionRuntimeContext(),
-            intent_router=self._intent_router,
-            executor_registry=self._asset_executor_registry,
+            runtime_context=runtime_context,
             available_artifacts=available_artifacts,
             run_id=run_id,
             queue_wait_ms=queue_wait_ms,
             on_stage_event=on_stage_event,
+            executed_signatures=executed_signatures,
         )
-        if signature_error and asset.status == "success":
-            asset.status = "error"
-            asset.error = "Dedup signature could not be computed."
-        return asset, stage_results
 
     def _stage_event_sink(
         self,
@@ -610,105 +591,23 @@ class AgentDashboardAssetService:
         tool_states: dict[str, OrchestrationState],
         on_stage_event: Callable[[StageDiagnostic], None] | None,
     ) -> Callable[[StageExecutionRecord], None]:
-        sink = on_stage_event or self._on_stage_event
-
-        def _emit(record: StageExecutionRecord) -> None:
-            tool_key = str(record.get("tool_key", ""))
-            current_state = tool_states.get(tool_key, "running")
-            diagnostic: StageDiagnostic = {
-                "run_id": run_id,
-                "workflow_key": workflow_key,
-                "tool_key": tool_key,
-                "intent": str(record.get("intent", "")),
-                "stage_key": str(record.get("stage_key", "")),
-                "attempt": int(record.get("attempt", 1)),
-                "status": str(record.get("status", "")),
-                "error_code": str(record.get("error_code", "")),
-                "message": str(record.get("message", "")),
-                "duration_ms": int(record.get("duration_ms", 0)),
-                "started_at": str(record.get("started_at", "")),
-                "ended_at": str(record.get("ended_at", "")),
-                "from_state": current_state,
-                "to_state": current_state,
-                "transition_valid": True,
-            }
-            self._stage_ledger_service.record_stage(diagnostic)
-            if self._telemetry_service is not None:
-                payload_ref = self._telemetry_service.attach_payload(payload=diagnostic, kind="agent_stage_diagnostic")
-                self._telemetry_service.record_metric(
-                    name="agent_stage_duration_ms",
-                    value=float(diagnostic.get("duration_ms", 0) or 0.0),
-                    attrs={
-                        "workflow_key": workflow_key,
-                        "tool_key": tool_key,
-                        "stage_key": str(record.get("stage_key", "")),
-                        "status": str(record.get("status", "")),
-                    },
-                )
-                self._telemetry_service.record_event(
-                    ObservabilityEvent(
-                        event_name="agent.stage",
-                        component="agent_dashboard.stage",
-                        status=str(record.get("status", "")) or "unknown",
-                        timestamp=str(record.get("ended_at", "")) or _now_iso(),
-                        attributes={
-                            "run_id": run_id,
-                            "workflow_key": workflow_key,
-                            "tool_key": tool_key,
-                            "stage_key": str(record.get("stage_key", "")),
-                            "attempt": int(record.get("attempt", 1) or 1),
-                            "duration_ms": int(record.get("duration_ms", 0) or 0),
-                            "error_code": str(record.get("error_code", "")),
-                        },
-                        payload_ref=payload_ref,
-                    )
-                )
-            if sink is not None:
-                sink(diagnostic)
-
-        return _emit
+        return self._run_recording_service.stage_event_sink(
+            workflow_key=workflow_key,
+            run_id=run_id,
+            tool_states=tool_states,
+            on_stage_event=on_stage_event,
+        )
 
     @staticmethod
     def _append_stage_notes(*, notes: list[str], intent: str, stage_results: list[ToolStageResult]) -> None:
-        for stage_result in stage_results:
-            notes.append(
-                f"{intent}: stage `{stage_result.stage_key}` -> {stage_result.status} "
-                f"(duration_ms={stage_result.duration_ms}, error_code={stage_result.error_code or 'none'}, attempt={stage_result.attempt})"
-            )
+        AgentRunRecordingService.append_stage_notes(notes=notes, intent=intent, stage_results=stage_results)
 
-    @staticmethod
-    def _dependency_map(*, tools: list[AgentToolDefinition]) -> dict[str, set[str]]:
-        produced_by: dict[str, set[str]] = defaultdict(set)
-        for tool in tools:
-            dependency = tool.execution_spec.get("dependency") if isinstance(tool.execution_spec, dict) else {}
-            produces = dependency.get("produces_artifacts") if isinstance(dependency, dict) else []
-            for key in (produces if isinstance(produces, list) else []):
-                normalized = " ".join(str(key).split()).strip()
-                if normalized:
-                    produced_by[normalized].add(tool.key)
-
-        deps: dict[str, set[str]] = {tool.key: set() for tool in tools}
-        for tool in tools:
-            dependency = tool.execution_spec.get("dependency") if isinstance(tool.execution_spec, dict) else {}
-            requires = dependency.get("requires_artifacts") if isinstance(dependency, dict) else []
-            for key in (requires if isinstance(requires, list) else []):
-                normalized = " ".join(str(key).split()).strip()
-                for parent in produced_by.get(normalized, set()):
-                    if parent != tool.key:
-                        deps[tool.key].add(parent)
-        return deps
+    def _dependency_map(self, *, tools: list[AgentToolDefinition]) -> dict[str, set[str]]:
+        return self._dependency_graph_service.build_dependency_map(tools=tools)
 
     @staticmethod
     def _publishable(asset: AgentAssetResult) -> bool:
-        if asset.status != "success":
-            return False
-        artifact = asset.artifact if isinstance(asset.artifact, dict) else {}
-        provenance = artifact.get("provenance") if isinstance(artifact.get("provenance"), dict) else {}
-        verification = provenance.get("verification") if isinstance(provenance.get("verification"), dict) else {}
-        policy_gate = provenance.get("policy_gate") if isinstance(provenance.get("policy_gate"), dict) else {}
-        verify_status = " ".join(str(verification.get("status", "passed")).split()).strip().lower()
-        policy_status = " ".join(str(policy_gate.get("status", "passed")).split()).strip().lower()
-        return verify_status == "passed" and policy_status == "passed"
+        return AgentRunRecordingService.publishable(asset)
 
     @staticmethod
     def _build_run_record(
@@ -720,24 +619,14 @@ class AgentDashboardAssetService:
         ended_at: str,
         summaries: list[AssetRunSummary],
     ) -> RunLedgerRecord:
-        status = "success"
-        error_counts: dict[str, int] = {}
-        for summary in summaries:
-            if " ".join(str(summary.get("status", "")).split()).strip().lower() == "error":
-                status = "error"
-            intent = " ".join(str(summary.get("intent", "")).split()).strip().lower() or "unknown"
-            if " ".join(str(summary.get("status", "")).split()).strip().lower() == "error":
-                error_counts[intent] = error_counts.get(intent, 0) + 1
-        return {
-            "run_id": run_id,
-            "workflow_key": workflow_key,
-            "planner_mode": planner_mode,
-            "status": status,
-            "started_at": started_at,
-            "ended_at": ended_at,
-            "tool_summaries": summaries,
-            "error_counts": error_counts,
-        }
+        return AgentRunRecordingService.build_run_record(
+            run_id=run_id,
+            workflow_key=workflow_key,
+            planner_mode=planner_mode,
+            started_at=started_at,
+            ended_at=ended_at,
+            summaries=summaries,
+        )
 
     def _record_run(
         self,
@@ -746,13 +635,7 @@ class AgentDashboardAssetService:
         notes: list[str],
         on_run_event: Callable[[RunLedgerRecord], None] | None,
     ) -> None:
-        try:
-            self._run_ledger_service.record_run(run_record)
-            sink = on_run_event or self._on_run_event
-            if sink is not None:
-                sink(run_record)
-        except (TypeError, ValueError, OSError, RuntimeError, PermissionError) as exc:
-            notes.append(f"[{E_RUN_LEDGER_WRITE_FAILED}] run ledger persistence failed: {exc}")
+        self._run_recording_service.record_run(run_record=run_record, notes=notes, on_run_event=on_run_event)
 
     def explain_mindmap_node(
         self,
@@ -868,42 +751,23 @@ class AgentDashboardAssetService:
 
     @staticmethod
     def _verification_status(asset: AgentAssetResult) -> str:
-        artifact = asset.artifact if isinstance(asset.artifact, dict) else {}
-        provenance = artifact.get("provenance") if isinstance(artifact.get("provenance"), dict) else {}
-        verification = provenance.get("verification") if isinstance(provenance.get("verification"), dict) else {}
-        return " ".join(str(verification.get("status", "unknown")).split()).strip().lower() or "unknown"
+        return AgentRunRecordingService.verification_status(asset)
 
     @staticmethod
     def _retry_count(asset: AgentAssetResult) -> int:
-        artifact = asset.artifact if isinstance(asset.artifact, dict) else {}
-        metrics = artifact.get("metrics") if isinstance(artifact.get("metrics"), dict) else {}
-        try:
-            return int(metrics.get("retry_count", 0))
-        except (TypeError, ValueError):
-            return 0
+        return AgentRunRecordingService.retry_count(asset)
 
     @staticmethod
     def _workflow_fail_fast() -> bool:
         return workflow_fail_policy() == "fail_fast"
 
     @staticmethod
-    def _tool_run_signature(*, tool: AgentToolDefinition, payload: dict[str, object], available_artifacts: ArtifactMap) -> str:
-        try:
-            payload_blob = json.dumps(_json_safe(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-            dependency = tool.execution_spec.get("dependency") if isinstance(tool.execution_spec, dict) else {}
-            required_keys = dependency.get("requires_artifacts") if isinstance(dependency, dict) else []
-            required_artifacts = {}
-            for key in (required_keys if isinstance(required_keys, list) else []):
-                normalized_key = " ".join(str(key).split()).strip()
-                if not normalized_key:
-                    continue
-                if normalized_key in available_artifacts:
-                    required_artifacts[normalized_key] = _checksum(available_artifacts[normalized_key])
-            artifacts_blob = json.dumps(required_artifacts, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-            raw = f"{tool.key}|{payload_blob}|{artifacts_blob}"
-            return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-        except (TypeError, ValueError):
-            return ""
+    def _tool_run_signature(*, tool: AgentToolDefinition, payload: IntentPayload, available_artifacts: ArtifactMap) -> str:
+        return AgentToolRunService.tool_run_signature(
+            tool=tool,
+            payload=payload,
+            available_artifacts=available_artifacts,
+        )
 
     def _resume_completed_tool_keys(
         self,
@@ -937,15 +801,7 @@ class AgentDashboardAssetService:
         return {key for key in completed if order_index.get(key, 999999) < resume_idx}
 
     def _expected_stages_for_tool(self, tool: AgentToolDefinition) -> list[str]:
-        workflow = self._tool_stage_catalog.get(tool.key)
-        if workflow is not None:
-            return list(workflow.stage_keys)
-        stage_profile = (
-            " ".join(str(tool.execution_spec.get("stage_profile", "default_asset_profile")).split()).strip().lower()
-            if isinstance(tool.execution_spec, dict)
-            else "default_asset_profile"
-        )
-        return list(AgentToolStageOrchestrator.default_stage_sequence(stage_profile))
+        return self._dependency_graph_service.expected_stages_for_tool(tool, stage_catalog=self._tool_stage_catalog)
 
 
 def _now_iso() -> str:
@@ -971,6 +827,23 @@ def _json_safe(value: object) -> object:
 def _checksum(value: object) -> str:
     blob = json.dumps(_json_safe(value), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _as_dict(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): item for key, item in value.items()}
+
+
+def _coerce_int(value: object, default: int = 0) -> int:
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        if isinstance(value, (int, float, str)):
+            return int(value)
+        return int(str(value))
+    except (TypeError, ValueError):
+        return default
 
 
 @contextmanager

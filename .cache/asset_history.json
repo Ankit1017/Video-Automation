@@ -1,6 +1,30 @@
 {
   "records": [
     {
+      "id": "2dd393ed8607420e",
+      "asset_type": "topic",
+      "topic": "Quantum Computers",
+      "title": "Detailed Description: Quantum Computers",
+      "created_at": "2026-03-01T07:34:35+00:00",
+      "model": "llama-3.1-8b-instant",
+      "request_payload": {
+        "topic": "Quantum Computers",
+        "additional_instructions": "Include real life examples",
+        "grounded_mode": false,
+        "require_citations": false,
+        "sources": [],
+        "grounding_metadata": {}
+      },
+      "result_payload": {
+        "content": "**Quantum Computers: A Comprehensive Guide**\n\n**Overview**\n\nQuantum computers are a new generation of computers that use the principles of quantum mechanics to perform calculations and operations that are beyond the capabilities of classical computers. They have the potential to revolutionize the way we process information and solve complex problems in fields such as cryptography, optimization, and simulation.\n\n**Core Concepts**\n\nBefore diving into the details of quantum computers, it's essential to understand some fundamental concepts:\n\n* **Quantum bits (qubits)**: Unlike classical bits, which can only be 0 or 1, qubits can exist in multiple states simultaneously, represented by a complex number called a superposition.\n* **Entanglement**: Qubits can become \"entangled,\" meaning their properties are connected, even when separated by large distances.\n* **Superposition**: Qubits can exist in multiple states at the same time, allowing for exponentially faster processing of certain types of calculations.\n* **Quantum gates**: Quantum gates are the quantum equivalent of logic gates in classical computers. They perform operations on qubits, such as rotations and entanglement.\n\n**How it Works**\n\nA quantum computer consists of:\n\n1. **Quantum processor**: This is the heart of the quantum computer, where qubits are manipulated using quantum gates.\n2. **Quantum control**: This system controls the quantum processor, ensuring that the qubits are correctly initialized, manipulated, and measured.\n3. **Classical computer**: This is used to control the quantum computer, perform classical calculations, and store data.\n\nThe process of using a quantum computer involves:\n\n1. **Quantum algorithm**: A quantum algorithm is a set of quantum gates and operations that solve a specific problem.\n2. **Quantum circuit**: A quantum circuit is a sequence of quantum gates that perform a specific operation on qubits.\n3. **Measurement**: The final step is to measure the qubits, which collapses the superposition into a single classical bit.\n\n**Real-World Use Cases**\n\nQuantum computers have the potential to revolutionize various fields, including:\n\n1. **Cryptography**: Quantum computers can break certain types of classical encryption, but they can also be used to create unbreakable quantum encryption.\n2. **Optimization**: Quantum computers can quickly find the optimal solution to complex optimization problems, such as the traveling salesman problem.\n3. **Simulation**: Quantum computers can simulate complex quantum systems, such as molecules and chemical reactions, which can lead to breakthroughs in fields like medicine and materials science.\n\n**Examples**\n\n1. **Google's Quantum Supremacy**: In 2019, Google announced that its quantum computer had achieved quantum supremacy, performing a calculation that was beyond the capabilities of classical computers.\n2. **IBM's Quantum Experience**: IBM offers a cloud-based quantum computer that allows researchers and developers to run quantum algorithms and experiments.\n3. **Quantum simulations**: Researchers have used quantum computers to simulate complex quantum systems, such as the behavior of molecules and the properties of materials.\n\n**Benefits**\n\nQuantum computers offer several benefits, including:\n\n1. **Exponential speedup**: Quantum computers can solve certain types of problems exponentially faster than classical computers.\n2. **Improved accuracy**: Quantum computers can perform calculations with higher accuracy than classical computers.\n3. **New applications**: Quantum computers can solve problems that are intractable for classical computers.\n\n**Limitations**\n\nQuantum computers also have several limitations, including:\n\n1. **Noise and error correction**: Quantum computers are prone to errors due to noise and decoherence, which can be corrected using quantum error correction techniques.\n2. **Scalability**: Currently, quantum computers are small-scale and need to be scaled up to perform complex calculations.\n3. **Quantum control**: Maintaining control over the quantum processor is a significant challenge.\n\n**What to Learn Next**\n\nTo learn more about quantum computers, we recommend:\n\n1. **Quantum algorithms**: Study the basics of quantum algorithms and how they are used to solve specific problems.\n2. **Quantum error correction**: Learn about the techniques used to correct errors in quantum computers.\n3. **Quantum hardware**: Explore the different types of quantum hardware, such as superconducting qubits and trapped ions.\n4. **Quantum software**: Learn about the software frameworks and tools used to develop and run quantum algorithms.\n\n**Conclusion**\n\nQuantum computers are a new and exciting field that has the potential to revolutionize the way we process information and solve complex problems. While there are still significant challenges to overcome, the benefits of quantum computers make them an essential area of research and development."
+      },
+      "status": "success",
+      "cache_hit": false,
+      "parse_note": "",
+      "error": "",
+      "raw_text": ""
+    },
+    {
       "id": "ea77ad79ba414908",
       "asset_type": "topic",
       "topic": "Transformers in LLMs",
@@ -11914,22 +11938,197 @@
       "raw_text": ""
     },
     {
-      "id": "2dd393ed8607420e",
-      "asset_type": "topic",
-      "topic": "Quantum Computers",
-      "title": "Detailed Description: Quantum Computers",
-      "created_at": "2026-03-01T07:34:35+00:00",
+      "id": "7f724cd08855437b",
+      "asset_type": "mindmap",
+      "topic": "Machine learning",
+      "title": "Mind Map: Machine learning",
+      "created_at": "2026-03-01T16:29:43+00:00",
       "model": "llama-3.1-8b-instant",
       "request_payload": {
-        "topic": "Quantum Computers",
-        "additional_instructions": "Include real life examples",
-        "grounded_mode": false,
-        "require_citations": false,
-        "sources": [],
-        "grounding_metadata": {}
+        "topic": "Machine learning",
+        "max_depth": 4,
+        "constraints": "Focus on health Care"
       },
       "result_payload": {
-        "content": "**Quantum Computers: A Comprehensive Guide**\n\n**Overview**\n\nQuantum computers are a new generation of computers that use the principles of quantum mechanics to perform calculations and operations that are beyond the capabilities of classical computers. They have the potential to revolutionize the way we process information and solve complex problems in fields such as cryptography, optimization, and simulation.\n\n**Core Concepts**\n\nBefore diving into the details of quantum computers, it's essential to understand some fundamental concepts:\n\n* **Quantum bits (qubits)**: Unlike classical bits, which can only be 0 or 1, qubits can exist in multiple states simultaneously, represented by a complex number called a superposition.\n* **Entanglement**: Qubits can become \"entangled,\" meaning their properties are connected, even when separated by large distances.\n* **Superposition**: Qubits can exist in multiple states at the same time, allowing for exponentially faster processing of certain types of calculations.\n* **Quantum gates**: Quantum gates are the quantum equivalent of logic gates in classical computers. They perform operations on qubits, such as rotations and entanglement.\n\n**How it Works**\n\nA quantum computer consists of:\n\n1. **Quantum processor**: This is the heart of the quantum computer, where qubits are manipulated using quantum gates.\n2. **Quantum control**: This system controls the quantum processor, ensuring that the qubits are correctly initialized, manipulated, and measured.\n3. **Classical computer**: This is used to control the quantum computer, perform classical calculations, and store data.\n\nThe process of using a quantum computer involves:\n\n1. **Quantum algorithm**: A quantum algorithm is a set of quantum gates and operations that solve a specific problem.\n2. **Quantum circuit**: A quantum circuit is a sequence of quantum gates that perform a specific operation on qubits.\n3. **Measurement**: The final step is to measure the qubits, which collapses the superposition into a single classical bit.\n\n**Real-World Use Cases**\n\nQuantum computers have the potential to revolutionize various fields, including:\n\n1. **Cryptography**: Quantum computers can break certain types of classical encryption, but they can also be used to create unbreakable quantum encryption.\n2. **Optimization**: Quantum computers can quickly find the optimal solution to complex optimization problems, such as the traveling salesman problem.\n3. **Simulation**: Quantum computers can simulate complex quantum systems, such as molecules and chemical reactions, which can lead to breakthroughs in fields like medicine and materials science.\n\n**Examples**\n\n1. **Google's Quantum Supremacy**: In 2019, Google announced that its quantum computer had achieved quantum supremacy, performing a calculation that was beyond the capabilities of classical computers.\n2. **IBM's Quantum Experience**: IBM offers a cloud-based quantum computer that allows researchers and developers to run quantum algorithms and experiments.\n3. **Quantum simulations**: Researchers have used quantum computers to simulate complex quantum systems, such as the behavior of molecules and the properties of materials.\n\n**Benefits**\n\nQuantum computers offer several benefits, including:\n\n1. **Exponential speedup**: Quantum computers can solve certain types of problems exponentially faster than classical computers.\n2. **Improved accuracy**: Quantum computers can perform calculations with higher accuracy than classical computers.\n3. **New applications**: Quantum computers can solve problems that are intractable for classical computers.\n\n**Limitations**\n\nQuantum computers also have several limitations, including:\n\n1. **Noise and error correction**: Quantum computers are prone to errors due to noise and decoherence, which can be corrected using quantum error correction techniques.\n2. **Scalability**: Currently, quantum computers are small-scale and need to be scaled up to perform complex calculations.\n3. **Quantum control**: Maintaining control over the quantum processor is a significant challenge.\n\n**What to Learn Next**\n\nTo learn more about quantum computers, we recommend:\n\n1. **Quantum algorithms**: Study the basics of quantum algorithms and how they are used to solve specific problems.\n2. **Quantum error correction**: Learn about the techniques used to correct errors in quantum computers.\n3. **Quantum hardware**: Explore the different types of quantum hardware, such as superconducting qubits and trapped ions.\n4. **Quantum software**: Learn about the software frameworks and tools used to develop and run quantum algorithms.\n\n**Conclusion**\n\nQuantum computers are a new and exciting field that has the potential to revolutionize the way we process information and solve complex problems. While there are still significant challenges to overcome, the benefits of quantum computers make them an essential area of research and development."
+        "name": "Machine Learning",
+        "children": [
+          {
+            "name": "Healthcare Applications",
+            "children": [
+              {
+                "name": "Disease Diagnosis",
+                "children": [
+                  {
+                    "name": "Clinical Decision Support",
+                    "children": []
+                  },
+                  {
+                    "name": "Predictive Modeling",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Personalized Medicine",
+                "children": [
+                  {
+                    "name": "Genomic Analysis",
+                    "children": []
+                  },
+                  {
+                    "name": "Pharmacogenomics",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Patient Outcomes",
+                "children": [
+                  {
+                    "name": "Risk Stratification",
+                    "children": []
+                  },
+                  {
+                    "name": "Treatment Response",
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Deep Learning Techniques",
+            "children": [
+              {
+                "name": "Convolutional Neural Networks",
+                "children": [
+                  {
+                    "name": "Image Segmentation",
+                    "children": []
+                  },
+                  {
+                    "name": "Object Detection",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Recurrent Neural Networks",
+                "children": [
+                  {
+                    "name": "Time Series Analysis",
+                    "children": []
+                  },
+                  {
+                    "name": "Natural Language Processing",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Autoencoders",
+                "children": [
+                  {
+                    "name": "Dimensionality Reduction",
+                    "children": []
+                  },
+                  {
+                    "name": "Anomaly Detection",
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Data Preprocessing",
+            "children": [
+              {
+                "name": "Data Cleaning",
+                "children": [
+                  {
+                    "name": "Handling Missing Values",
+                    "children": []
+                  },
+                  {
+                    "name": "Data Normalization",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Feature Engineering",
+                "children": [
+                  {
+                    "name": "Dimensionality Reduction",
+                    "children": []
+                  },
+                  {
+                    "name": "Feature Scaling",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Data Visualization",
+                "children": [
+                  {
+                    "name": "Heatmaps",
+                    "children": []
+                  },
+                  {
+                    "name": "Scatter Plots",
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Ethics and Challenges",
+            "children": [
+              {
+                "name": "Bias and Fairness",
+                "children": [
+                  {
+                    "name": "Data Bias",
+                    "children": []
+                  },
+                  {
+                    "name": "Algorithmic Fairness",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Privacy and Security",
+                "children": [
+                  {
+                    "name": "Data Anonymization",
+                    "children": []
+                  },
+                  {
+                    "name": "Secure Data Sharing",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Regulatory Frameworks",
+                "children": [
+                  {
+                    "name": "HIPAA",
+                    "children": []
+                  },
+                  {
+                    "name": "GDPR",
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       "status": "success",
       "cache_hit": false,

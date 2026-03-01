@@ -84,9 +84,11 @@ class IntentConversationService:
             text = self._text_utils.clean_text(item.get("text", ""))
             if not text:
                 continue
+            raw_intents = item.get("intents")
+            intent_candidates = raw_intents if isinstance(raw_intents, list) else []
             intents = [
                 self._text_utils.clean_text(intent)
-                for intent in (item.get("intents") or [])
+                for intent in intent_candidates
                 if self._text_utils.clean_text(intent)
             ]
             intents_suffix = f" | intents: {', '.join(intents)}" if intents else ""

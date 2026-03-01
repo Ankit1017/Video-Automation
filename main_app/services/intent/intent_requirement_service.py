@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from main_app.contracts import (
     IntentPayload,
@@ -13,6 +13,16 @@ from main_app.models import GroqSettings
 from main_app.services.cached_llm_service import CachedLLMService
 from main_app.services.intent.intent_router_payload_utils import IntentRouterPayloadUtils
 from main_app.services.intent.intent_router_text_utils import IntentRouterTextUtils
+
+
+def _to_intent_payload(value: object) -> IntentPayload:
+    if not isinstance(value, dict):
+        return {}
+    return cast(IntentPayload, {str(key): item for key, item in value.items()})
+
+
+def _set_payload_field(payload: IntentPayload, field_name: str, value: object) -> None:
+    cast(dict[str, object], payload)[field_name] = value
 
 
 class IntentRequirementService:
@@ -83,7 +93,7 @@ class IntentRequirementService:
                     fallback_topic=global_topic,
                 )
 
-            final_note = llm_note or "Requirements extracted via LLM-driven mode."
+            final_note: str | None = llm_note or "Requirements extracted via LLM-driven mode."
             return prepared, final_note, llm_cache_hit
 
         local_prepared, local_note = self._extract_requirements_locally(
@@ -126,7 +136,7 @@ class IntentRequirementService:
             )
 
         merged = self._payload_utils.merge_payload_maps(local_prepared, llm_prepared)
-        note_parts = [part for part in [local_note, llm_note] if part]
+        note_parts: list[str] = [str(part) for part in [local_note, llm_note] if part]
         if note_parts:
             note_parts.append("Local extraction was prioritized; LLM only filled remaining gaps.")
         final_note = " ".join(note_parts).strip() if note_parts else None
@@ -162,14 +172,14 @@ class IntentRequirementService:
         payload: IntentPayload,
         missing_optional: list[str],
     ) -> IntentPayload:
-        updated = dict(payload)
+        updated: dict[str, object] = dict(payload)
         optional_defs = self.optional_field_definitions(intent)
         for field_name in missing_optional:
             meta = optional_defs.get(field_name)
             if not meta:
                 continue
             updated[field_name] = meta.get("default")
-        return updated
+        return _to_intent_payload(updated)
 
     def apply_user_optionals(
         self,
@@ -179,22 +189,24 @@ class IntentRequirementService:
         user_values: IntentPayload,
         missing_optional: list[str],
     ) -> IntentPayload:
-        updated = dict(payload)
+        updated: dict[str, object] = dict(payload)
+        user_values_map = cast(dict[str, object], user_values)
         optional_defs = self.optional_field_definitions(intent)
         for field_name in missing_optional:
-            if field_name not in user_values:
+            if field_name not in user_values_map:
                 continue
             meta = optional_defs.get(field_name)
             if not meta:
                 continue
+            user_value = user_values_map.get(field_name)
             normalized = self._payload_utils.normalize_field_value(
                 meta,
-                user_values[field_name],
+                user_value,
                 allow_empty_string=True,
             )
             if normalized is not None:
                 updated[field_name] = normalized
-        return updated
+        return _to_intent_payload(updated)
 
     def fill_optional_with_llm(
         self,
@@ -208,7 +220,7 @@ class IntentRequirementService:
         optional_defs = self.optional_field_definitions(intent)
         target_fields = [field for field in missing_optional if field in optional_defs]
         if not target_fields:
-            return dict(payload), "No optional fields to fill.", None, False
+            return _to_intent_payload(payload), "No optional fields to fill.", None, False
 
         field_spec_lines: list[str] = []
         for field_name in target_fields:
@@ -243,9 +255,9 @@ class IntentRequirementService:
 
         extracted_json, parse_error = self._payload_utils.parse_json_object(raw_text)
         if parse_error:
-            return dict(payload), None, f"Optional fill parse failed: {parse_error}", cache_hit
+            return _to_intent_payload(payload), None, f"Optional fill parse failed: {parse_error}", cache_hit
 
-        updated = dict(payload)
+        updated: dict[str, object] = dict(payload)
         filled_count = 0
         for field_name in target_fields:
             if field_name not in extracted_json:
@@ -261,9 +273,9 @@ class IntentRequirementService:
             filled_count += 1
 
         if filled_count == 0:
-            return updated, "LLM could not confidently infer optional values.", None, cache_hit
+            return _to_intent_payload(updated), "LLM could not confidently infer optional values.", None, cache_hit
 
-        return updated, f"LLM filled {filled_count} optional field(s).", None, cache_hit
+        return _to_intent_payload(updated), f"LLM filled {filled_count} optional field(s).", None, cache_hit
 
     def _extract_requirements_with_llm(
         self,
@@ -272,7 +284,7 @@ class IntentRequirementService:
         intents: list[str],
         settings: GroqSettings,
     ) -> tuple[dict[str, object], str | None, bool]:
-        default_empty = {"topic": "", "requirements": {}}
+        default_empty: dict[str, object] = {"topic": "", "requirements": {}}
         if not intents:
             return default_empty, None, False
 
@@ -339,7 +351,7 @@ class IntentRequirementService:
         if not isinstance(requirements, dict):
             requirements = {}
 
-        return {"topic": topic_text, "requirements": requirements}, None, cache_hit
+        return cast(dict[str, object], {"topic": topic_text, "requirements": requirements}), None, cache_hit
 
     def _extract_requirements_locally(
         self,
@@ -358,7 +370,7 @@ class IntentRequirementService:
 
             constraint_field = self._constraint_field_by_intent.get(intent)
             if constraint_text and constraint_field:
-                payload[constraint_field] = constraint_text
+                _set_payload_field(payload, constraint_field, constraint_text)
 
             optional_defs = self.optional_field_definitions(intent)
             for field_name, meta in optional_defs.items():
@@ -376,7 +388,7 @@ class IntentRequirementService:
                     allow_empty_string=False,
                 )
                 if normalized is not None:
-                    payload[field_name] = normalized
+                    _set_payload_field(payload, field_name, normalized)
 
             prepared[intent] = payload
 
@@ -411,6 +423,6 @@ class IntentRequirementService:
                     allow_empty_string=False,
                 )
                 if normalized is not None:
-                    payload[field_name] = normalized
+                    _set_payload_field(payload, field_name, normalized)
 
         return payload

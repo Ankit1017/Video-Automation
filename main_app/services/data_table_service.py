@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from typing import cast
+
+from main_app.contracts import DataTablePayload
 from main_app.models import DataTableGenerationResult, GroqSettings
 from main_app.parsers.data_table_parser import DataTableParser
 from main_app.services.asset_history_service import AssetHistoryService
@@ -78,7 +81,7 @@ class DataTableService:
 
         result = DataTableGenerationResult(
             raw_text=raw_text,
-            parsed_table=parsed_table,
+            parsed_table=cast(DataTablePayload | None, parsed_table),
             parse_error=parse_error,
             parse_note=parse_note,
             cache_hit=cache_hit,

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from main_app.contracts import IntentPayload
+from typing import Any, cast
+
+from main_app.contracts import IntentPayload, JSONValue
 from main_app.models import AgentAssetResult
 from main_app.services.agent_dashboard.artifact_adapter import legacy_result_to_artifact
 from main_app.services.agent_dashboard.error_codes import E_EXECUTOR_FAILED, E_PARSE_FAILED
@@ -40,7 +42,7 @@ def build_content_asset_result(
         payload=payload,
         status="success",
         title=f"{title_prefix}: {topic}",
-        content=content,
+        content=cast(JSONValue, content),
         cache_hit=cache_hit,
         parse_note=(parse_note or "").strip(),
     )
@@ -63,7 +65,7 @@ def build_media_asset_result(
         payload=payload,
         status="success",
         title=f"{title_prefix}: {topic}",
-        content=content,
+        content=cast(JSONValue, content),
         cache_hit=cache_hit,
         audio_bytes=audio_bytes,
         audio_error=audio_error or "",
@@ -77,7 +79,7 @@ def build_artifact_result(
     payload: IntentPayload,
     status: str,
     title: str,
-    content: object | None = None,
+    content: JSONValue | None = None,
     error: str = "",
     raw_text: str = "",
     cache_hit: bool = False,
@@ -100,17 +102,17 @@ def build_artifact_result(
         audio_error=audio_error,
     )
     result.artifact = legacy_result_to_artifact(result)
-    artifact = result.artifact if isinstance(result.artifact, dict) else {}
-    provenance = artifact.get("provenance") if isinstance(artifact.get("provenance"), dict) else {}
+    artifact = _as_dict(result.artifact)
+    provenance = _as_dict(artifact.get("provenance"))
     if error_code:
         provenance["error_code"] = error_code
     if status == "error" and not error_code:
         provenance["error_code"] = E_EXECUTOR_FAILED
     artifact["provenance"] = provenance
-    metrics = artifact.get("metrics") if isinstance(artifact.get("metrics"), dict) else {}
+    metrics = _as_dict(artifact.get("metrics"))
     metrics["cache_hit"] = bool(cache_hit)
     artifact["metrics"] = metrics
-    result.artifact = artifact
+    result.artifact = cast(Any, artifact)
     return result
 
 
@@ -145,3 +147,9 @@ def build_parsed_asset_result(
         cache_hit=cache_hit,
         parse_note=parse_note,
     )
+
+
+def _as_dict(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): item for key, item in value.items()}

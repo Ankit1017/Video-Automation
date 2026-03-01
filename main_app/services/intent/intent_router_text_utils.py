@@ -229,7 +229,7 @@ class IntentRouterTextUtils:
             "turn_count": [r"(\d+)\s*(?:dialogue\s*turns?|turns?)"],
         }
         for field_name, patterns in int_patterns.items():
-            extractors[field_name] = lambda _text, lower, pats=patterns: self.extract_first_int(lower, pats)
+            extractors[field_name] = self._build_int_extractor(patterns)
 
         extractors["difficulty"] = lambda _text, lower: self._extract_difficulty(lower)
         extractors["format_key"] = lambda _text, lower: self._extract_format_key(lower)
@@ -242,6 +242,12 @@ class IntentRouterTextUtils:
 
         self._field_extractors = extractors
         return self._field_extractors
+
+    def _build_int_extractor(self, patterns: list[str]) -> FieldExtractor:
+        def _extractor(_text: str, lower: str) -> Any | None:
+            return self.extract_first_int(lower, patterns)
+
+        return _extractor
 
     @staticmethod
     def _extract_difficulty(lower: str) -> str | None:

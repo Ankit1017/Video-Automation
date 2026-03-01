@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 from main_app.contracts import QuizHistoryEntry, QuizHistoryStorePayload
 from main_app.infrastructure.mongo_base import MongoCollectionConfig, MongoCollectionProvider
+
+
+def _as_quiz_entry(value: object) -> QuizHistoryEntry | None:
+    if not isinstance(value, dict):
+        return None
+    return cast(QuizHistoryEntry, value)
 
 
 class QuizHistoryRepository(Protocol):
@@ -31,7 +37,12 @@ class QuizHistoryStore:
         quizzes = data.get("quizzes", [])
         if not isinstance(quizzes, list):
             return []
-        return [item for item in quizzes if isinstance(item, dict)]
+        normalized: list[QuizHistoryEntry] = []
+        for item in quizzes:
+            parsed = _as_quiz_entry(item)
+            if parsed is not None:
+                normalized.append(parsed)
+        return normalized
 
     def save_quizzes(self, quizzes: list[QuizHistoryEntry]) -> None:
         payload: QuizHistoryStorePayload = {"quizzes": quizzes}
@@ -77,7 +88,11 @@ class QuizHistoryStore:
         quizzes = payload.get("quizzes", [])
         if not isinstance(quizzes, list):
             return {"quizzes": []}
-        normalized: list[QuizHistoryEntry] = [item for item in quizzes if isinstance(item, dict)]
+        normalized: list[QuizHistoryEntry] = []
+        for item in quizzes:
+            parsed = _as_quiz_entry(item)
+            if parsed is not None:
+                normalized.append(parsed)
         return {"quizzes": normalized}
 
 
@@ -106,8 +121,9 @@ class MongoQuizHistoryStore:
         quizzes: list[QuizHistoryEntry] = []
         for item in collection.find({}, {"_id": 0, "quiz_entry": 1}):
             quiz_entry = item.get("quiz_entry")
-            if isinstance(quiz_entry, dict):
-                quizzes.append(quiz_entry)
+            parsed = _as_quiz_entry(quiz_entry)
+            if parsed is not None:
+                quizzes.append(parsed)
         return quizzes
 
     def save_quizzes(self, quizzes: list[QuizHistoryEntry]) -> None:
@@ -131,7 +147,7 @@ class MongoQuizHistoryStore:
         collection = self._provider.collection()
         item = collection.find_one({"_id": target}, {"_id": 0, "quiz_entry": 1})
         quiz_entry = item.get("quiz_entry") if isinstance(item, dict) else None
-        return quiz_entry if isinstance(quiz_entry, dict) else None
+        return _as_quiz_entry(quiz_entry)
 
     def upsert_quiz(self, quiz_entry: QuizHistoryEntry) -> None:
         quiz_id = str(quiz_entry.get("id", "")).strip()

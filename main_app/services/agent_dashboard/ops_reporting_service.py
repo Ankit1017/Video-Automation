@@ -6,6 +6,16 @@ from typing import Any
 from main_app.models import AssetHistoryRecord
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): item for key, item in value.items()}
+
+
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
 class OpsReportingService:
     def build_summary(self, records: list[AssetHistoryRecord]) -> dict[str, Any]:
         if not records:
@@ -28,21 +38,21 @@ class OpsReportingService:
             by_intent_total[intent] += 1
             if record.status == "success":
                 by_intent_success[intent] += 1
-            payload = record.result_payload if isinstance(record.result_payload, dict) else {}
-            artifact = payload.get("artifact") if isinstance(payload.get("artifact"), dict) else {}
-            provenance = artifact.get("provenance") if isinstance(artifact.get("provenance"), dict) else {}
-            verification = provenance.get("verification") if isinstance(provenance.get("verification"), dict) else {}
+            payload = _as_dict(record.result_payload)
+            artifact = _as_dict(payload.get("artifact"))
+            provenance = _as_dict(artifact.get("provenance"))
+            verification = _as_dict(provenance.get("verification"))
             verify_status = " ".join(str(verification.get("status", "")).split()).strip().lower()
             if verify_status == "failed":
                 by_intent_verify_fail[intent] += 1
-            issues = verification.get("issues") if isinstance(verification.get("issues"), list) else []
+            issues = _as_list(verification.get("issues"))
             for issue in issues:
                 if not isinstance(issue, dict):
                     continue
                 code = " ".join(str(issue.get("code", "")).split()).strip().upper()
                 if code:
                     error_codes[code] += 1
-            metrics = artifact.get("metrics") if isinstance(artifact.get("metrics"), dict) else {}
+            metrics = _as_dict(artifact.get("metrics"))
             total_duration_raw = metrics.get("total_duration_ms", 0)
             try:
                 durations.append(max(0, int(total_duration_raw)))

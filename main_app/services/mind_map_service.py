@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from typing import cast
+
+from main_app.contracts import MindMapPayload
 from main_app.models import GroqSettings, MindMapGenerationResult
 from main_app.parsers.mind_map_parser import MindMapParser
 from main_app.services.asset_history_service import AssetHistoryService
@@ -69,7 +72,7 @@ class MindMapService:
         )
         result = MindMapGenerationResult(
             raw_text=raw_text,
-            parsed_map=parsed_map,
+            parsed_map=cast(MindMapPayload | None, parsed_map),
             parse_error=parse_error,
             parse_note=parse_note,
             cache_hit=cache_hit,

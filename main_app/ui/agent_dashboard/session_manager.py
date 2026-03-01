@@ -171,7 +171,7 @@ class AgentDashboardSessionManager:
         if planner_mode not in self._PLANNER_MODES:
             planner_mode = "Local First (No LLM if possible)"
 
-        session_entry = {
+        session_entry: AgentDashboardSessionEntry = {
             "id": session_id,
             "created_at": created_at,
             "updated_at": self._utc_now_iso(),

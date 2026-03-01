@@ -349,10 +349,14 @@ class QuizExportService:
             options = [" ".join(str(option).split()).strip() for option in raw_options if " ".join(str(option).split()).strip()]
             if not question_text or len(options) < 2:
                 continue
-            try:
-                correct_index = int(item.get("correct_index", item.get("correct_option_index", 0)))
-            except (TypeError, ValueError):
+            raw_correct = item.get("correct_index", item.get("correct_option_index", 0))
+            if isinstance(raw_correct, bool):
                 correct_index = 0
+            else:
+                try:
+                    correct_index = int(raw_correct) if isinstance(raw_correct, (int, float, str)) else int(str(raw_correct))
+                except (TypeError, ValueError):
+                    correct_index = 0
             correct_index = max(0, min(correct_index, len(options) - 1))
             normalized.append(
                 {

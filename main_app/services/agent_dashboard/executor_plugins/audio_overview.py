@@ -4,6 +4,7 @@ from main_app.contracts import IntentPayload
 from main_app.models import AgentAssetResult, GroqSettings
 from main_app.services.agent_dashboard.executor_types import (
     AssetExecutor,
+    AssetExecutionRuntimeContext,
     AssetExecutorPlugin,
     AssetExecutorPluginContext,
 )
@@ -14,7 +15,12 @@ from main_app.services.agent_dashboard.executor_plugins.parsed_asset_result impo
 
 
 def _build_executor(context: AssetExecutorPluginContext) -> AssetExecutor:
-    def _execute(payload: IntentPayload, settings: GroqSettings) -> AgentAssetResult:
+    def _execute(
+        payload: IntentPayload,
+        settings: GroqSettings,
+        runtime_context: AssetExecutionRuntimeContext,
+    ) -> AgentAssetResult:
+        _ = runtime_context
         topic = str(payload.get("topic", ""))
         result = context.audio_overview_service.generate(
             topic=topic,

@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import re
 from html import escape
-from typing import Any
+from typing import Any, cast
 
 import streamlit as st
 
+from main_app.contracts import AudioOverviewPayload
 from main_app.models import GroqSettings
 from main_app.services.audio_overview_service import AudioOverviewService
 from main_app.services.background_jobs import BackgroundJobContext, BackgroundJobManager
@@ -79,6 +80,12 @@ AUDIO_OVERVIEW_TAB_CSS = """
 
 
 _AUDIO_DEFAULT_USE_HINGLISH_SCRIPT = False
+
+
+def _as_audio_overview_payload(value: object) -> AudioOverviewPayload | None:
+    if not isinstance(value, dict):
+        return None
+    return cast(AudioOverviewPayload, value)
 
 
 def _resolve_audio_language(*, selected_language: str, use_hinglish_script: bool) -> str:
@@ -205,10 +212,11 @@ def render_audio_overview_tab(
             payload = result.parsed_overview
             audio_bytes: bytes | None = None
             audio_error = ""
-            if payload and not result.parse_error:
+            typed_payload = _as_audio_overview_payload(payload)
+            if typed_payload is not None and not result.parse_error:
                 context.update_progress(progress=0.65, message="Synthesizing audio...")
                 audio_bytes, synth_error = audio_overview_service.synthesize_mp3(
-                    overview_payload=payload,
+                    overview_payload=typed_payload,
                     language=playback_language,
                     slow=slow_audio,
                 )
@@ -320,15 +328,21 @@ def render_audio_overview_tab(
     regen_col, _ = st.columns([0.28, 0.72])
     with regen_col:
         if st.button("Regenerate Audio", key="audio_overview_regen_audio", width="stretch"):
+            typed_payload = _as_audio_overview_payload(payload)
+            if typed_payload is None:
+                st.error("Stored audio overview payload is invalid.")
+                st.stop()
+            assert typed_payload is not None
             try:
                 with st.spinner("Synthesizing audio..."):
-                    audio_bytes, audio_error = audio_overview_service.synthesize_mp3(
-                        overview_payload=payload,
+                    audio_bytes, regen_audio_error = audio_overview_service.synthesize_mp3(
+                        overview_payload=typed_payload,
                         language=st.session_state.audio_overview_tts_language,
                         slow=bool(st.session_state.audio_overview_tts_slow),
                     )
+                audio_error = str(regen_audio_error or "")
                 st.session_state.audio_overview_audio_bytes = audio_bytes
-                st.session_state.audio_overview_audio_error = audio_error or ""
+                st.session_state.audio_overview_audio_error = audio_error
                 if audio_error:
                     st.warning(audio_error)
                 else:

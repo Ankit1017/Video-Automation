@@ -57,58 +57,98 @@ class AppContainer:
     agent_dashboard_session_store: Any
 
 
+@dataclass(frozen=True)
+class AppServiceFactories:
+    topic_explainer_service_cls: type[TopicExplainerService] = TopicExplainerService
+    mind_map_parser_cls: type[MindMapParser] = MindMapParser
+    mind_map_service_cls: type[MindMapService] = MindMapService
+    flashcards_parser_cls: type[FlashcardsParser] = FlashcardsParser
+    flashcards_service_cls: type[FlashcardsService] = FlashcardsService
+    report_service_cls: type[ReportService] = ReportService
+    data_table_parser_cls: type[DataTableParser] = DataTableParser
+    data_table_service_cls: type[DataTableService] = DataTableService
+    quiz_parser_cls: type[QuizParser] = QuizParser
+    quiz_service_cls: type[QuizService] = QuizService
+    slideshow_parser_cls: type[SlideShowParser] = SlideShowParser
+    slideshow_service_cls: type[SlideShowService] = SlideShowService
+    audio_overview_parser_cls: type[AudioOverviewParser] = AudioOverviewParser
+    audio_overview_service_cls: type[AudioOverviewService] = AudioOverviewService
+    video_asset_service_cls: type[VideoAssetService] = VideoAssetService
+    source_grounding_service_cls: type[SourceGroundingService] = SourceGroundingService
+    global_grounding_service_cls: type[GlobalGroundingService] = GlobalGroundingService
+    intent_parser_cls: type[IntentParser] = IntentParser
+    intent_router_service_cls: type[IntentRouterService] = IntentRouterService
+    run_ledger_service_cls: type[RunLedgerService] = RunLedgerService
+    stage_ledger_service_cls: type[StageLedgerService] = StageLedgerService
+    agent_asset_service_cls: type[AgentDashboardAssetService] = AgentDashboardAssetService
+    agent_dashboard_service_cls: type[AgentDashboardService] = AgentDashboardService
+    quiz_export_service_cls: type[QuizExportService] = QuizExportService
+    report_export_service_cls: type[ReportExportService] = ReportExportService
+    video_export_service_cls: type[VideoExportService] = VideoExportService
+    asset_history_service_cls: type[AssetHistoryService] = AssetHistoryService
+
+
 def build_app_container(
     *,
     llm_service: CachedLLMService,
     storage_bundle: Any,
     telemetry_service: TelemetryService | None = None,
+    factories: AppServiceFactories | None = None,
 ) -> AppContainer:
-    asset_history_service = AssetHistoryService(storage_bundle.asset_history_store)
-    explainer_service = TopicExplainerService(llm_service, history_service=asset_history_service)
-    mind_map_service = MindMapService(llm_service, MindMapParser(llm_service), history_service=asset_history_service)
-    flashcards_service = FlashcardsService(
+    service_factories = factories or AppServiceFactories()
+    asset_history_service = service_factories.asset_history_service_cls(storage_bundle.asset_history_store)
+    explainer_service = service_factories.topic_explainer_service_cls(llm_service, history_service=asset_history_service)
+    mind_map_service = service_factories.mind_map_service_cls(
         llm_service,
-        FlashcardsParser(llm_service),
+        service_factories.mind_map_parser_cls(llm_service),
         history_service=asset_history_service,
     )
-    report_service = ReportService(llm_service, history_service=asset_history_service)
-    data_table_service = DataTableService(
+    flashcards_service = service_factories.flashcards_service_cls(
         llm_service,
-        DataTableParser(llm_service),
+        service_factories.flashcards_parser_cls(llm_service),
         history_service=asset_history_service,
     )
-    quiz_service = QuizService(
+    report_service = service_factories.report_service_cls(llm_service, history_service=asset_history_service)
+    data_table_service = service_factories.data_table_service_cls(
         llm_service,
-        QuizParser(llm_service),
+        service_factories.data_table_parser_cls(llm_service),
+        history_service=asset_history_service,
+    )
+    quiz_service = service_factories.quiz_service_cls(
+        llm_service,
+        service_factories.quiz_parser_cls(llm_service),
         storage_bundle.quiz_history_store,
         asset_history_service=asset_history_service,
     )
-    slideshow_service = SlideShowService(
+    slideshow_service = service_factories.slideshow_service_cls(
         llm_service,
-        SlideShowParser(llm_service),
+        service_factories.slideshow_parser_cls(llm_service),
         history_service=asset_history_service,
     )
-    audio_overview_parser = AudioOverviewParser(llm_service)
-    audio_overview_service = AudioOverviewService(
+    audio_overview_parser = service_factories.audio_overview_parser_cls(llm_service)
+    audio_overview_service = service_factories.audio_overview_service_cls(
         llm_service,
         audio_overview_parser,
         history_service=asset_history_service,
     )
-    video_service = VideoAssetService(
+    video_service = service_factories.video_asset_service_cls(
         llm_service,
         slideshow_service,
         audio_overview_parser,
         audio_overview_service,
         history_service=asset_history_service,
     )
-    source_grounding_service = SourceGroundingService()
-    global_grounding_service = GlobalGroundingService(
+    source_grounding_service = service_factories.source_grounding_service_cls()
+    global_grounding_service = service_factories.global_grounding_service_cls(
         source_grounding_service=source_grounding_service,
         telemetry_service=telemetry_service,
     )
-    intent_router_service = IntentRouterService(llm_service, IntentParser())
-    run_ledger_service = RunLedgerService(store=storage_bundle.run_ledger_store)
-    stage_ledger_service = StageLedgerService(store=storage_bundle.stage_ledger_store)
+    intent_router_service = service_factories.intent_router_service_cls(
+        llm_service,
+        service_factories.intent_parser_cls(),
+    )
+    run_ledger_service = service_factories.run_ledger_service_cls(store=storage_bundle.run_ledger_store)
+    stage_ledger_service = service_factories.stage_ledger_service_cls(store=storage_bundle.stage_ledger_store)
     asset_executor_registry = build_default_asset_executor_registry(
         explainer_service=explainer_service,
         mind_map_service=mind_map_service,
@@ -120,7 +160,7 @@ def build_app_container(
         audio_overview_service=audio_overview_service,
         report_service=report_service,
     )
-    agent_asset_service = AgentDashboardAssetService(
+    agent_asset_service = service_factories.agent_asset_service_cls(
         intent_router=intent_router_service,
         asset_executor_registry=asset_executor_registry,
         mind_map_service=mind_map_service,
@@ -130,7 +170,7 @@ def build_app_container(
         stage_ledger_service=stage_ledger_service,
         telemetry_service=telemetry_service,
     )
-    agent_dashboard_service = AgentDashboardService(
+    agent_dashboard_service = service_factories.agent_dashboard_service_cls(
         intent_router=intent_router_service,
         explainer_service=explainer_service,
         mind_map_service=mind_map_service,
@@ -155,9 +195,9 @@ def build_app_container(
         video_service=video_service,
         intent_router_service=intent_router_service,
         agent_dashboard_service=agent_dashboard_service,
-        quiz_export_service=QuizExportService(telemetry_service=telemetry_service),
-        report_export_service=ReportExportService(telemetry_service=telemetry_service),
-        video_export_service=VideoExportService(telemetry_service=telemetry_service),
+        quiz_export_service=service_factories.quiz_export_service_cls(telemetry_service=telemetry_service),
+        report_export_service=service_factories.report_export_service_cls(telemetry_service=telemetry_service),
+        video_export_service=service_factories.video_export_service_cls(telemetry_service=telemetry_service),
         source_grounding_service=source_grounding_service,
         global_grounding_service=global_grounding_service,
         asset_history_service=asset_history_service,

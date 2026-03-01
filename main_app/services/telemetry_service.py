@@ -301,7 +301,11 @@ class OTelBridge:
         if not self.enabled:
             yield "", ""
             return
-        with self._tracer.start_as_current_span(name, attributes=attributes) as span:  # type: ignore[union-attr]
+        tracer = self._tracer
+        if tracer is None:
+            yield "", ""
+            return
+        with tracer.start_as_current_span(name, attributes=attributes) as span:
             span_context = span.get_span_context()
             trace_id = format(span_context.trace_id, "032x")
             span_id = format(span_context.span_id, "016x")

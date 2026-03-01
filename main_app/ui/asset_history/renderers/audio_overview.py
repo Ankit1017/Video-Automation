@@ -3,17 +3,38 @@ from __future__ import annotations
 import json
 import re
 from html import escape
-from typing import Any
+from typing import cast
 
 import streamlit as st
 
+from main_app.contracts import AudioOverviewPayload, DialogueTurn, AudioSpeaker
 from main_app.models import AssetHistoryRecord
 from main_app.ui.asset_history.context import AssetHistoryRenderContext
 
 
+def _as_audio_payload(value: object) -> AudioOverviewPayload | None:
+    if not isinstance(value, dict):
+        return None
+    return cast(AudioOverviewPayload, value)
+
+
+def _speakers(payload: AudioOverviewPayload) -> list[AudioSpeaker]:
+    raw = payload.get("speakers", [])
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, dict)]
+
+
+def _dialogue(payload: AudioOverviewPayload) -> list[DialogueTurn]:
+    raw = payload.get("dialogue", [])
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, dict)]
+
+
 def render_audio_overview_record(record: AssetHistoryRecord, context: AssetHistoryRenderContext) -> None:
-    payload = record.result_payload if isinstance(record.result_payload, dict) else {}
-    if not isinstance(payload, dict):
+    payload = _as_audio_payload(record.result_payload)
+    if payload is None:
         st.json(record.result_payload)
         return
 
@@ -32,8 +53,8 @@ def render_audio_overview_record(record: AssetHistoryRecord, context: AssetHisto
     if slow_key not in st.session_state:
         st.session_state[slow_key] = bool(record.request_payload.get("slow_audio", False))
 
-    speakers = payload.get("speakers", [])
-    dialogue = payload.get("dialogue", [])
+    speakers = _speakers(payload)
+    dialogue = _dialogue(payload)
     title = str(payload.get("title", "")).strip() or "Audio Overview"
     topic = record.topic or str(payload.get("topic", "")).strip()
     summary = str(payload.get("summary", "")).strip()
@@ -74,21 +95,18 @@ def render_audio_overview_record(record: AssetHistoryRecord, context: AssetHisto
 
     st.markdown("#### Transcript")
     with st.container(border=True):
-        if isinstance(dialogue, list):
-            for turn in dialogue:
-                if not isinstance(turn, dict):
-                    continue
-                speaker_name = str(turn.get("speaker", "Speaker")).strip() or "Speaker"
-                text = str(turn.get("text", "")).strip()
-                st.markdown(
-                    (
-                        '<div class="ao-turn">'
-                        f'<p class="ao-turn-speaker">{escape(speaker_name)}</p>'
-                        f'<p class="ao-turn-text">{escape(text)}</p>'
-                        "</div>"
-                    ),
-                    unsafe_allow_html=True,
-                )
+        for turn in dialogue:
+            speaker_name = str(turn.get("speaker", "Speaker")).strip() or "Speaker"
+            text = str(turn.get("text", "")).strip()
+            st.markdown(
+                (
+                    '<div class="ao-turn">'
+                    f'<p class="ao-turn-speaker">{escape(speaker_name)}</p>'
+                    f'<p class="ao-turn-text">{escape(text)}</p>'
+                    "</div>"
+                ),
+                unsafe_allow_html=True,
+            )
 
     if summary:
         with st.expander("Episode Summary", expanded=False):
@@ -173,7 +191,7 @@ def render_audio_overview_record(record: AssetHistoryRecord, context: AssetHisto
             )
 
 
-def audio_overview_to_markdown(payload: dict[str, Any]) -> str:
+def audio_overview_to_markdown(payload: AudioOverviewPayload) -> str:
     topic = str(payload.get("topic", "")).strip()
     title = str(payload.get("title", "")).strip() or "Audio Overview"
     speakers = payload.get("speakers") or []
@@ -202,10 +220,10 @@ def audio_overview_to_markdown(payload: dict[str, Any]) -> str:
         for turn in dialogue:
             if not isinstance(turn, dict):
                 continue
-            speaker = str(turn.get("speaker", "Speaker")).strip() or "Speaker"
+            speaker_name = str(turn.get("speaker", "Speaker")).strip() or "Speaker"
             text = str(turn.get("text", "")).strip()
             if text:
-                lines.append(f"- **{speaker}:** {text}")
+                lines.append(f"- **{speaker_name}:** {text}")
     lines.append("")
 
     if summary:

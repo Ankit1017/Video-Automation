@@ -45,7 +45,8 @@ class AgentWorkflowRegistry:
         workflow_key_raw = str(workflow_spec.get("workflow_key", ""))
         title_raw = str(workflow_spec.get("title", workflow_key_raw))
         description_raw = str(workflow_spec.get("description", ""))
-        tool_keys_raw = workflow_spec.get("tool_keys") if isinstance(workflow_spec.get("tool_keys"), list) else []
+        raw_tool_keys_value = workflow_spec.get("tool_keys")
+        tool_keys_raw = raw_tool_keys_value if isinstance(raw_tool_keys_value, list) else []
         dependencies_raw = (
             workflow_spec.get("tool_dependencies")
             if isinstance(workflow_spec.get("tool_dependencies"), dict)

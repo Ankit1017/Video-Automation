@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from html import escape
 import json
 import re
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 import streamlit as st
 
-from main_app.contracts import VideoPayload
+from main_app.contracts import VideoPayload, VideoSlideScript
 from main_app.services.slide_deck_exporter import SlideDeckExporter
 from main_app.ui.components.slideshow_view import SlideshowRenderConfig, render_slideshow_view
 
@@ -84,7 +84,7 @@ def render_video_view(
 
     render_slideshow_view(
         topic=topic,
-        slides=slides,
+        slides=cast(list[dict[str, Any]], [slide for slide in slides if isinstance(slide, dict)]),
         config=config.slideshow,
         slide_exporter=slide_exporter,
     )
@@ -244,7 +244,7 @@ def render_video_view(
             )
 
 
-def _script_for_slide_index(*, slide_scripts: list[dict[str, Any]], slide_index: int) -> dict[str, Any] | None:
+def _script_for_slide_index(*, slide_scripts: list[VideoSlideScript], slide_index: int) -> dict[str, Any] | None:
     for pos, script in enumerate(slide_scripts):
         if not isinstance(script, dict):
             continue
@@ -254,15 +254,15 @@ def _script_for_slide_index(*, slide_scripts: list[dict[str, Any]], slide_index:
         except (TypeError, ValueError):
             normalized = pos
         if normalized == slide_index:
-            return script
+            return cast(dict[str, Any], script)
     if 0 <= slide_index < len(slide_scripts):
         item = slide_scripts[slide_index]
         if isinstance(item, dict):
-            return item
+            return cast(dict[str, Any], item)
     return None
 
 
-def _video_scripts_to_markdown(*, topic: str, payload: dict[str, Any]) -> str:
+def _video_scripts_to_markdown(*, topic: str, payload: VideoPayload) -> str:
     lines: list[str] = [f"# {topic.strip() or 'Video Script'}", ""]
 
     speakers = payload.get("speaker_roster", [])

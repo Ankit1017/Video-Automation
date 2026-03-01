@@ -234,6 +234,7 @@ GitHub workflow (`.github/workflows/ci.yml`) runs:
 - [Architecture Boundaries](docs/ARCHITECTURE_BOUNDARIES.md)
 - [Generic Asset Architecture](docs/GENERIC_ASSET_ARCHITECTURE.md)
 - [Agent Workflows and Tools](docs/AGENT_WORKFLOWS_AND_TOOLS.md)
+- [Agent Asset Service Refactor](docs/AGENT_ASSET_SERVICE_REFACTOR.md)
 - [Orchestration State Machine](docs/ORCHESTRATION_STATE_MACHINE.md)
 - [Policy Gates](docs/POLICY_GATES.md)
 - [Schema Contracts](docs/SCHEMA_CONTRACTS.md)
@@ -247,6 +248,7 @@ GitHub workflow (`.github/workflows/ci.yml`) runs:
 - [Observability Tab Guide](docs/OBSERVABILITY_TAB_GUIDE.md)
 - [Observability Debug Cookbook](docs/OBSERVABILITY_DEBUG_COOKBOOK.md)
 - [Payload Logging Policy](docs/PAYLOAD_LOGGING_POLICY.md)
+- [Mypy Debt Tracker](docs/MYPY_DEBT_TRACKER.md)
 - [Migration Guide Folder Restructure](docs/MIGRATION_GUIDE_FOLDER_RESTRUCTURE.md)
 - [Video Asset E2E Summary](docs/VIDEO_ASSET_CREATION_E2E_SUMMARY.md)
 

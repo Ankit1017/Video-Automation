@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import inspect
-from typing import Iterable
+from typing import Iterable, cast
 
 from main_app.contracts import IntentPayload
 from main_app.models import AgentAssetResult, GroqSettings
 from main_app.services.agent_dashboard.executor_types import (
     AssetExecutor,
+    AnyAssetExecutor,
     AssetExecutionRuntimeContext,
     AssetExecutorRegistration,
+    LegacyAssetExecutor,
 )
 from main_app.services.audio_overview_service import AudioOverviewService
 from main_app.services.data_table_service import DataTableService
@@ -22,10 +24,10 @@ from main_app.services.video_asset_service import VideoAssetService
 
 
 class AgentAssetExecutorRegistry:
-    def __init__(self, executors: dict[str, AssetExecutor] | None = None) -> None:
-        self._executors: dict[str, AssetExecutor] = dict(executors or {})
+    def __init__(self, executors: dict[str, AnyAssetExecutor] | None = None) -> None:
+        self._executors: dict[str, AnyAssetExecutor] = dict(executors or {})
 
-    def register(self, intent: str, executor: AssetExecutor) -> None:
+    def register(self, intent: str, executor: AnyAssetExecutor) -> None:
         normalized_intent = " ".join(str(intent).strip().split()).lower()
         if not normalized_intent:
             return
@@ -59,10 +61,12 @@ class AgentAssetExecutorRegistry:
 
         try:
             effective_runtime = runtime_context or AssetExecutionRuntimeContext()
-            if _executor_accepts_runtime_context(executor):
-                result = executor(payload, settings, effective_runtime)
-            else:
-                result = executor(payload, settings)  # type: ignore[misc]
+            result = self._invoke_executor(
+                executor=executor,
+                payload=payload,
+                settings=settings,
+                runtime_context=effective_runtime,
+            )
             if not result.intent:
                 result.intent = intent
             if not result.payload:
@@ -76,17 +80,34 @@ class AgentAssetExecutorRegistry:
                 payload=payload,
             )
 
+    @staticmethod
+    def _invoke_executor(
+        *,
+        executor: AnyAssetExecutor,
+        payload: IntentPayload,
+        settings: GroqSettings,
+        runtime_context: AssetExecutionRuntimeContext,
+    ) -> AgentAssetResult:
+        if AgentAssetExecutorRegistry._supports_runtime_context(executor):
+            runtime_executor = cast(AssetExecutor, executor)
+            return runtime_executor(payload, settings, runtime_context)
+        legacy_executor = cast(LegacyAssetExecutor, executor)
+        return legacy_executor(payload, settings)
 
-def _executor_accepts_runtime_context(executor: AssetExecutor) -> bool:
-    try:
-        signature = inspect.signature(executor)
-    except (TypeError, ValueError):
-        return True
-    params = list(signature.parameters.values())
-    if any(param.kind == inspect.Parameter.VAR_POSITIONAL for param in params):
-        return True
-    return len(params) >= 3
-
+    @staticmethod
+    def _supports_runtime_context(executor: AnyAssetExecutor) -> bool:
+        try:
+            signature = inspect.signature(executor)
+        except (TypeError, ValueError):
+            # Prefer modern executor contract when signature introspection fails.
+            return True
+        positional = [
+            parameter
+            for parameter in signature.parameters.values()
+            if parameter.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        ]
+        has_varargs = any(parameter.kind == inspect.Parameter.VAR_POSITIONAL for parameter in signature.parameters.values())
+        return has_varargs or len(positional) >= 3
 
 def build_default_asset_executor_registry(
     *,

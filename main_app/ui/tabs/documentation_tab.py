@@ -447,7 +447,18 @@ def _inject_docs_center_styles() -> None:
     )
 
 
-@st.cache_data(show_spinner=False)
+def _cache_data(*, show_spinner: bool = False):
+    cache_data = getattr(st, "cache_data", None)
+    if callable(cache_data):
+        return cache_data(show_spinner=show_spinner)
+
+    def _decorator(func):
+        return func
+
+    return _decorator
+
+
+@_cache_data(show_spinner=False)
 def _read_markdown_cached(*, path_str: str, mtime_ns: int) -> str:
     _ = mtime_ns
     path = Path(path_str)

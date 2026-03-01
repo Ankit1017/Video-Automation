@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol, cast
 
 from main_app.contracts import ToolPluginSpec, WorkflowPluginSpec
 from main_app.services.agent_dashboard.error_codes import (
@@ -42,6 +42,12 @@ class PluginValidationResult:
     fix_hints: list[str] | None = None
 
 
+def _as_dict(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): item for key, item in value.items()}
+
+
 def default_capabilities_for_intent(intent: str) -> list[str]:
     normalized = " ".join(str(intent).split()).strip().lower()
     if normalized in {"video", "audio_overview"}:
@@ -52,7 +58,7 @@ def default_capabilities_for_intent(intent: str) -> list[str]:
 
 
 def normalize_tool_plugin_spec(spec: ToolPluginSpec) -> ToolPluginSpec:
-    raw = spec if isinstance(spec, dict) else {}
+    raw = _as_dict(spec)
     plugin_key = " ".join(str(raw.get("plugin_key", raw.get("intent", ""))).split()).strip().lower().replace(" ", "_")
     intent = " ".join(str(raw.get("intent", raw.get("plugin_key", ""))).split()).strip().lower()
     title = " ".join(str(raw.get("title", intent.title())).split()).strip() or intent.title()
@@ -65,16 +71,17 @@ def normalize_tool_plugin_spec(spec: ToolPluginSpec) -> ToolPluginSpec:
     )
     if not capabilities:
         capabilities = default_capabilities_for_intent(intent)
-    schema_ref_raw = raw.get("schema_ref") if isinstance(raw.get("schema_ref"), dict) else {}
+    schema_ref_raw = _as_dict(raw.get("schema_ref"))
     version = " ".join(str(schema_ref_raw.get("version", "v1")).split()).strip().lower() or "v1"
     schema_id = " ".join(str(schema_ref_raw.get("id", f"{intent.replace(' ', '_')}.{version}")).split()).strip()
+    execution_spec_raw = _as_dict(raw.get("execution_spec"))
     return {
         "plugin_key": plugin_key,
         "intent": intent,
         "title": title,
         "description": description,
         "capabilities": capabilities,
-        "execution_spec": raw.get("execution_spec") if isinstance(raw.get("execution_spec"), dict) else {},
+        "execution_spec": cast(Any, execution_spec_raw),
         "schema_ref": {
             "intent": " ".join(str(schema_ref_raw.get("intent", intent)).split()).strip().lower() or intent,
             "version": version,
@@ -85,7 +92,7 @@ def normalize_tool_plugin_spec(spec: ToolPluginSpec) -> ToolPluginSpec:
 
 def plugin_spec_fix_hints(spec: ToolPluginSpec) -> list[str]:
     hints: list[str] = []
-    raw = spec if isinstance(spec, dict) else {}
+    raw = _as_dict(spec)
     plugin_key = " ".join(str(raw.get("plugin_key", "")).split()).strip()
     intent = " ".join(str(raw.get("intent", "")).split()).strip()
     if not plugin_key:
@@ -94,8 +101,8 @@ def plugin_spec_fix_hints(spec: ToolPluginSpec) -> list[str]:
         hints.append("Set `intent` to the runtime intent name (for example `topic`).")
     if not isinstance(raw.get("execution_spec"), dict):
         hints.append("Add `execution_spec` with stage profile, dependency, and requirement schema key.")
-    schema_ref = raw.get("schema_ref")
-    if not isinstance(schema_ref, dict):
+    schema_ref = _as_dict(raw.get("schema_ref"))
+    if not schema_ref:
         hints.append("Add `schema_ref` with `intent`, `version`, and `id` fields.")
     else:
         if not str(schema_ref.get("id", "")).strip():

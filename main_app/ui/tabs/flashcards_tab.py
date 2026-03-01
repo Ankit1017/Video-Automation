@@ -4,6 +4,7 @@ from typing import Any
 
 import streamlit as st
 
+from main_app.contracts import FlashcardItem, FlashcardsPayload
 from main_app.models import GroqSettings
 from main_app.services.cached_llm_service import CachedLLMService
 from main_app.services.flashcards_service import FlashcardsService
@@ -222,6 +223,17 @@ FLASHCARDS_CSS = """
 """
 
 
+def _flashcard_items(payload: FlashcardsPayload) -> list[FlashcardItem]:
+    raw_cards = payload.get("cards", [])
+    if not isinstance(raw_cards, list):
+        return []
+    cards: list[FlashcardItem] = []
+    for item in raw_cards:
+        if isinstance(item, dict):
+            cards.append(item)
+    return cards
+
+
 def render_flashcards_tab(
     *,
     flashcards_service: FlashcardsService,
@@ -299,8 +311,16 @@ def render_flashcards_tab(
                 st.caption("Raw model response:")
                 st.code(generation_result.raw_text)
             else:
+                if not generation_result.parsed_flashcards:
+                    st.error("Parsed flashcards payload was empty.")
+                    st.stop()
+                assert generation_result.parsed_flashcards is not None
+                cards = _flashcard_items(generation_result.parsed_flashcards)
+                if not cards:
+                    st.error("Parsed flashcards payload did not contain valid cards.")
+                    st.stop()
                 st.session_state.flashcards_topic = flashcards_topic_input.strip()
-                st.session_state.flashcards_cards = generation_result.parsed_flashcards["cards"]
+                st.session_state.flashcards_cards = [dict(card) for card in cards]
                 st.session_state.flashcards_index = 0
                 st.session_state.flashcards_show_answer = False
                 st.session_state.flashcards_explanations = {}

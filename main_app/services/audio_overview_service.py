@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import asyncio
 from io import BytesIO
-from typing import Any
+from typing import Any, cast
 
+from main_app.contracts import AudioOverviewPayload
 from main_app.models import AudioOverviewGenerationResult, GroqSettings
 from main_app.parsers.audio_overview_parser import AudioOverviewParser
 from main_app.services.asset_history_service import AssetHistoryService
@@ -152,7 +153,7 @@ class AudioOverviewService:
 
         result = AudioOverviewGenerationResult(
             raw_text=raw_text,
-            parsed_overview=parsed_overview,
+            parsed_overview=cast(AudioOverviewPayload | None, parsed_overview),
             parse_error=parse_error,
             parse_note=parse_note,
             cache_hit=cache_hit,
@@ -184,7 +185,7 @@ class AudioOverviewService:
     def synthesize_mp3(
         self,
         *,
-        overview_payload: dict[str, Any],
+        overview_payload: AudioOverviewPayload,
         language: str = "en",
         slow: bool = False,
     ) -> tuple[bytes | None, str | None]:
@@ -240,7 +241,7 @@ class AudioOverviewService:
             return None, f"Failed to synthesize audio: {exc}"
 
     @staticmethod
-    def _to_spoken_script(overview_payload: dict[str, Any]) -> str:
+    def _to_spoken_script(overview_payload: AudioOverviewPayload) -> str:
         title = " ".join(str(overview_payload.get("title", "")).split()).strip()
         topic = " ".join(str(overview_payload.get("topic", "")).split()).strip()
         dialogue = overview_payload.get("dialogue") or []
@@ -265,7 +266,7 @@ class AudioOverviewService:
 
         return " ".join(lines).strip()
 
-    def _extract_dialogue_turns(self, overview_payload: dict[str, Any]) -> list[tuple[str, str]]:
+    def _extract_dialogue_turns(self, overview_payload: AudioOverviewPayload) -> list[tuple[str, str]]:
         raw_dialogue = overview_payload.get("dialogue") or []
         turns: list[tuple[str, str]] = []
         if not isinstance(raw_dialogue, list):
@@ -287,7 +288,7 @@ class AudioOverviewService:
     def _speaker_voice_map(
         self,
         *,
-        overview_payload: dict[str, Any],
+        overview_payload: AudioOverviewPayload,
         language: str,
         observed_speakers: list[str],
     ) -> dict[str, str]:
@@ -321,7 +322,7 @@ class AudioOverviewService:
         self,
         *,
         turns: list[tuple[str, str]],
-        overview_payload: dict[str, Any],
+        overview_payload: AudioOverviewPayload,
         language: str,
         slow: bool,
         edge_tts_module: Any,

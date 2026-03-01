@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from main_app.contracts import (
     AssetArtifactEnvelope,
@@ -16,6 +16,19 @@ from main_app.contracts import (
     VideoPayload,
     FlashcardsPayload,
 )
+
+
+def _as_intent_payload(value: object) -> IntentPayload:
+    if not isinstance(value, dict):
+        return {}
+    normalized = {str(key): item for key, item in value.items()}
+    return cast(IntentPayload, normalized)
+
+
+def _as_artifact_envelope(value: object) -> AssetArtifactEnvelope | None:
+    if not isinstance(value, dict):
+        return None
+    return cast(AssetArtifactEnvelope, value)
 
 
 @dataclass(frozen=True)
@@ -192,7 +205,7 @@ class AgentPlan:
             planner_mode=str(raw.get("planner_mode", "")),
             intents=[str(intent) for intent in raw.get("intents", []) if str(intent).strip()],
             payloads={
-                str(intent): dict(payload)
+                str(intent): _as_intent_payload(payload)
                 for intent, payload in (payloads_raw.items() if isinstance(payloads_raw, dict) else [])
                 if isinstance(payload, dict)
             },
@@ -251,7 +264,7 @@ class AgentAssetResult:
         return cls(
             intent=str(raw.get("intent", "")),
             status=str(raw.get("status", "")),
-            payload=dict(payload_raw) if isinstance(payload_raw, dict) else {},
+            payload=_as_intent_payload(payload_raw),
             title=str(raw.get("title", "")),
             content=raw.get("content"),  # Preserve stored payload as-is.
             error=str(raw.get("error", "")),
@@ -260,7 +273,7 @@ class AgentAssetResult:
             cache_hit=bool(raw.get("cache_hit", False)),
             audio_bytes=raw.get("audio_bytes") if isinstance(raw.get("audio_bytes"), (bytes, bytearray)) else None,
             audio_error=str(raw.get("audio_error", "")),
-            artifact=raw.get("artifact") if isinstance(raw.get("artifact"), dict) else None,
+            artifact=_as_artifact_envelope(raw.get("artifact")),
         )
 
 
@@ -308,8 +321,8 @@ class AssetHistoryRecord:
             title=str(raw.get("title", "")),
             created_at=str(raw.get("created_at", "")),
             model=str(raw.get("model", "")),
-            request_payload=dict(request_payload) if isinstance(request_payload, dict) else {},
-            result_payload=raw.get("result_payload"),
+            request_payload=_as_intent_payload(request_payload),
+            result_payload=cast(JSONValue, raw.get("result_payload")),
             status=str(raw.get("status", "")),
             cache_hit=bool(raw.get("cache_hit", False)),
             parse_note=str(raw.get("parse_note", "")),

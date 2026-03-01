@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 from main_app.contracts import (
     AgentDashboardSessionEntry,
     AgentDashboardSessionStorePayload,
 )
 from main_app.infrastructure.mongo_base import MongoCollectionConfig, MongoCollectionProvider
+
+
+def _as_session_entry(value: object) -> AgentDashboardSessionEntry | None:
+    if not isinstance(value, dict):
+        return None
+    return cast(AgentDashboardSessionEntry, value)
 
 
 class AgentDashboardSessionRepository(Protocol):
@@ -37,9 +43,11 @@ class AgentDashboardSessionStore:
         sessions = data.get("sessions", [])
         if not isinstance(sessions, list):
             return []
-        normalized: list[AgentDashboardSessionEntry] = [
-            item for item in sessions if isinstance(item, dict)
-        ]
+        normalized: list[AgentDashboardSessionEntry] = []
+        for item in sessions:
+            parsed = _as_session_entry(item)
+            if parsed is not None:
+                normalized.append(parsed)
         return sorted(
             normalized,
             key=lambda item: str(item.get("updated_at", item.get("created_at", ""))),
@@ -64,8 +72,9 @@ class AgentDashboardSessionStore:
         replaced = False
         for idx, item in enumerate(sessions):
             if str(item.get("id", "")).strip() == session_id:
-                if "created_at" not in session_entry and item.get("created_at"):
-                    session_entry["created_at"] = item.get("created_at")
+                created_at = " ".join(str(item.get("created_at", "")).split()).strip()
+                if "created_at" not in session_entry and created_at:
+                    session_entry["created_at"] = created_at
                 sessions[idx] = session_entry
                 replaced = True
                 break
@@ -102,9 +111,11 @@ class AgentDashboardSessionStore:
         sessions = payload.get("sessions", [])
         if not isinstance(sessions, list):
             return {"sessions": []}
-        normalized: list[AgentDashboardSessionEntry] = [
-            item for item in sessions if isinstance(item, dict)
-        ]
+        normalized: list[AgentDashboardSessionEntry] = []
+        for item in sessions:
+            parsed = _as_session_entry(item)
+            if parsed is not None:
+                normalized.append(parsed)
         return {"sessions": normalized}
 
 
@@ -133,8 +144,9 @@ class MongoAgentDashboardSessionStore:
         sessions: list[AgentDashboardSessionEntry] = []
         for item in collection.find({}, {"_id": 0, "session_entry": 1}).sort("updated_sort", -1):
             session_entry = item.get("session_entry")
-            if isinstance(session_entry, dict):
-                sessions.append(session_entry)
+            parsed = _as_session_entry(session_entry)
+            if parsed is not None:
+                sessions.append(parsed)
         return sessions
 
     def get_session(self, session_id: str) -> AgentDashboardSessionEntry | None:
@@ -144,7 +156,7 @@ class MongoAgentDashboardSessionStore:
         collection = self._provider.collection()
         item = collection.find_one({"_id": target}, {"_id": 0, "session_entry": 1})
         session_entry = item.get("session_entry") if isinstance(item, dict) else None
-        return session_entry if isinstance(session_entry, dict) else None
+        return _as_session_entry(session_entry)
 
     def upsert_session(self, session_entry: AgentDashboardSessionEntry) -> None:
         session_id = str(session_entry.get("id", "")).strip()
@@ -154,9 +166,11 @@ class MongoAgentDashboardSessionStore:
         collection = self._provider.collection()
         existing = collection.find_one({"_id": session_id}, {"_id": 0, "session_entry": 1})
         existing_entry = existing.get("session_entry") if isinstance(existing, dict) else None
-        if isinstance(existing_entry, dict) and "created_at" not in session_entry and existing_entry.get("created_at"):
-            session_entry = dict(session_entry)
-            session_entry["created_at"] = existing_entry.get("created_at")
+        if isinstance(existing_entry, dict) and "created_at" not in session_entry:
+            created_at = " ".join(str(existing_entry.get("created_at", "")).split()).strip()
+            if created_at:
+                session_entry = cast(AgentDashboardSessionEntry, dict(session_entry))
+                session_entry["created_at"] = created_at
 
         updated_sort = str(session_entry.get("updated_at", session_entry.get("created_at", "")))
         collection.replace_one(

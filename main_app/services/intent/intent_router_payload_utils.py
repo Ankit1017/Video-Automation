@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 
 from main_app.contracts import (
+    IntentPayload,
     IntentPayloadMap,
     JSONObject,
     JSONValue,
@@ -51,7 +53,7 @@ class IntentRouterPayloadUtils:
         for intent in intents:
             result = dict(llm_payloads.get(intent, {}))
             result.update(local_payloads.get(intent, {}))
-            merged[intent] = result
+            merged[intent] = cast(IntentPayload, result)
         return merged
 
     @staticmethod
@@ -84,7 +86,12 @@ class IntentRouterPayloadUtils:
         field_type = str(meta.get("type", "text"))
         if field_type == "int":
             try:
-                number = int(float(value))
+                if isinstance(value, bool):
+                    return None
+                if isinstance(value, (int, float, str)):
+                    number = int(float(value))
+                else:
+                    number = int(float(str(value)))
             except (TypeError, ValueError):
                 return None
             min_value = int(meta.get("min", number))

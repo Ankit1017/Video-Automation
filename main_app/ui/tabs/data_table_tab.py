@@ -9,6 +9,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from main_app.contracts import DataTablePayload
 from main_app.models import GroqSettings
 from main_app.services.cached_llm_service import CachedLLMService
 from main_app.services.data_table_service import DataTableService
@@ -39,6 +40,28 @@ DATA_TABLE_CSS = """
     }
 </style>
 """
+
+
+def _table_columns(payload: DataTablePayload) -> list[str]:
+    raw_columns = payload.get("columns", [])
+    if not isinstance(raw_columns, list):
+        return []
+    return [str(column).strip() for column in raw_columns if str(column).strip()]
+
+
+def _table_rows(payload: DataTablePayload, *, columns: list[str]) -> list[dict[str, str]]:
+    raw_rows = payload.get("rows", [])
+    if not isinstance(raw_rows, list):
+        return []
+    rows: list[dict[str, str]] = []
+    for raw_row in raw_rows:
+        if not isinstance(raw_row, dict):
+            continue
+        normalized: dict[str, str] = {}
+        for column in columns:
+            normalized[column] = str(raw_row.get(column, ""))
+        rows.append(normalized)
+    return rows
 
 
 def render_data_table_tab(
@@ -117,9 +140,19 @@ def render_data_table_tab(
                 st.code(generation_result.raw_text)
             else:
                 parsed = generation_result.parsed_table
+                if not parsed:
+                    st.error("Parsed table payload was empty.")
+                    st.stop()
+                assert parsed is not None
+                parsed_payload = parsed
+                parsed_columns = _table_columns(parsed_payload)
+                parsed_rows = _table_rows(parsed_payload, columns=parsed_columns)
+                if not parsed_columns or not parsed_rows:
+                    st.error("Parsed table did not contain usable columns/rows.")
+                    st.stop()
                 st.session_state.data_table_topic = topic.strip()
-                st.session_state.data_table_columns = parsed["columns"]
-                st.session_state.data_table_rows = parsed["rows"]
+                st.session_state.data_table_columns = parsed_columns
+                st.session_state.data_table_rows = parsed_rows
                 st.session_state.data_table_last_note = notes.strip()
                 st.success("Data table generated successfully.")
         except Exception as exc:  # noqa: BLE001
