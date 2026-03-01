@@ -40,6 +40,11 @@ This guide explains backend execution flow and how to triage failures quickly.
 - Report: `report_exporter.py`
 - Slides: `slide_deck_exporter.py`
 - Video: `video_exporter.py`
+- Avatar video internals:
+  - timeline builder: `video_conversation_timeline_service.py`
+  - render profile selector: `video_render_profile_service.py`
+  - lipsync cues: `video_avatar_lipsync_service.py`
+  - avatar overlays: `video_avatar_overlay_service.py`
 
 ## G. Observability signal path
 - In-app telemetry: `main_app/services/telemetry_service.py`
@@ -72,6 +77,12 @@ This guide explains backend execution flow and how to triage failures quickly.
 1. Inspect exporter-specific error details.
 2. Validate source artifact schema and payload completeness.
 3. Correlate with prior stage/job failure events.
+
+## Avatar-mode degradation/fallback
+1. Filter events for `video.avatar_fallback` and `video.avatar_lipsync.segment`.
+2. Check `render_mode_requested` vs `render_mode_used` and `avatar_fallback_used` in payload metadata.
+3. Inspect `conversation_timeline` + `audio_segments` for timing monotonicity.
+4. If needed, force `classic_slides` temporarily while fixing avatar dependencies.
 
 ## OTel export connectivity errors
 1. Ensure Docker daemon is running.

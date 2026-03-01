@@ -3768,5 +3768,149 @@
       "completion_tokens": 370,
       "total_tokens": 555
     }
+  },
+  "52744f78db1fbda93e1dd07633fb611d61602edac4d5af97d4b441a5a63bc938": {
+    "response": "{\n  \"topic\": \"Agentic AI\",\n  \"subtopics\": [\n    {\n      \"title\": \"What is Agentic AI?\",\n      \"focus\": \"Define agentic AI, its characteristics, and key features to establish a foundation for the presentation.\"\n    },\n    {\n      \"title\": \"Types of Agentic AI\",\n      \"focus\": \"Explore different types of agentic AI, including goal-oriented, self-aware, and autonomous AI, to demonstrate its diversity and applications.\"\n    },\n    {\n      \"title\": \"Implementing Agentic AI in Practice\",\n      \"focus\": \"Discuss real-world examples and case studies of agentic AI implementation, highlighting successes, challenges, and lessons learned.\"\n    }\n  ]\n}",
+    "topic": "Agentic AI",
+    "model": "llama-3.1-8b-instant",
+    "task": "slideshow_outline",
+    "label": "SlideShow Outline: Agentic AI",
+    "usage": {
+      "prompt_tokens": 150,
+      "completion_tokens": 149,
+      "total_tokens": 299
+    }
+  },
+  "0d8bebb3b4ca82aa9058726694fddd9c3a96ce8745d5b47689f01d6c5d38103c": {
+    "response": "```json\n{\n  \"slides\": [\n    {\n      \"title\": \"What is Agentic AI?\",\n      \"representation\": \"two_column\",\n      \"layout_payload\": {\n        \"left_title\": \"Definition\",\n        \"left_items\": [\n          \"Agentic AI refers to a type of artificial intelligence that exhibits autonomous behavior, decision-making, and self-awareness.\",\n          \"It has the ability to perceive its environment, set goals, and take actions to achieve them.\"\n        ],\n        \"right_title\": \"Key Characteristics\",\n        \"right_items\": [\n          \"Agentic AI systems are proactive, rather than reactive.\",\n          \"They can learn from experience and adapt to new situations.\",\n          \"They have a sense of agency, meaning they can make decisions and take actions independently.\"\n        ]\n      },\n      \"bullets\": [\n        \"Agentic AI is a subset of artificial general intelligence (AGI).\",\n        \"It has the potential to revolutionize various industries, including healthcare, finance, and transportation.\",\n        \"However, it also raises concerns about job displacement and potential misuse.\"\n      ],\n      \"speaker_notes\": \"Agentic AI is a rapidly evolving field, and its development is still in its early stages.\"\n    },\n    {\n      \"title\": \"Agentic AI Key Features\",\n      \"representation\": \"bullet\",\n      \"layout_payload\": {\"items\": [\n        \"Autonomy: Agentic AI systems can operate independently and make decisions without human intervention.\",\n        \"Self-awareness: They have a sense of their own existence and can reflect on their actions and goals.\",\n        \"Proactivity: Agentic AI systems can take the initiative to achieve their goals and adapt to changing situations.\",\n        \"Learning: They can learn from experience and improve their performance over time.\"\n      ]},\n      \"bullets\": [\n        \"Agentic AI systems can interact with humans in a more natural and intuitive way.\",\n        \"They can provide personalized services and recommendations based on individual preferences and behavior.\",\n        \"However, they also require careful design and testing to ensure their safety and reliability.\"\n      ],\n      \"speaker_notes\": \"Agentic AI systems can be designed to be transparent and explainable, which is essential for building trust and confidence in their decision-making processes.\",\n      \"code_snippet\": \"```python\\n# Example of an agentic AI system in Python\\nclass AgenticAI:\\n    def __init__(self):\\n        self.goals = []\\n\\n    def set_goal(self, goal):\\n        self.goals.append(goal)\\n\\n    def achieve_goal(self):\\n        # Implement goal-achieving logic here\\n        pass\\n\\n# Create an instance of the AgenticAI class\\nai = AgenticAI()\\nai.set_goal('learn_from_experience')\\nai.achieve_goal()\\n```\",\n      \"code_language\": \"python\"\n    }\n  ]\n}\n```",
+    "topic": "Agentic AI | What is Agentic AI?",
+    "model": "llama-3.1-8b-instant",
+    "task": "slideshow_section",
+    "label": "SlideShow Section: Agentic AI | What is Agentic AI?",
+    "usage": {
+      "prompt_tokens": 631,
+      "completion_tokens": 591,
+      "total_tokens": 1222
+    }
+  },
+  "2f8ada5ad78ee3e244fdbf74a6449331de25241906888b6ee17f12e0ff744a80": {
+    "response": "```json\n{\n  \"slides\": [\n    {\n      \"title\": \"Types of Agentic AI: Goal-Oriented\",\n      \"representation\": \"two_column\",\n      \"layout_payload\": {\n        \"left_title\": \"Characteristics\",\n        \"left_items\": [\n          \"Designed to achieve specific goals\",\n          \"Utilize planning and decision-making algorithms\",\n          \"Can adapt to changing environments\"\n        ],\n        \"right_title\": \"Examples\",\n        \"right_items\": [\n          \"Virtual assistants (e.g., Siri, Alexa)\",\n          \"Personalized product recommendation systems\",\n          \"Autonomous vehicles (e.g., self-driving cars)\"\n        ]\n      },\n      \"bullets\": [\n        \"Goal-oriented AI systems prioritize achieving specific objectives.\",\n        \"These systems often employ planning and decision-making algorithms to navigate complex tasks.\",\n        \"They can adapt to changing environments, making them more resilient.\"\n      ],\n      \"speaker_notes\": \"Goal-oriented AI is a type of agentic AI that focuses on achieving specific goals.\",\n      \"code_snippet\": \"\"\n    },\n    {\n      \"title\": \"Types of Agentic AI: Self-Aware and Autonomous\",\n      \"representation\": \"comparison\",\n      \"layout_payload\": {\n        \"left_title\": \"Self-Aware AI\",\n        \"left_points\": [\n          \"Possesses a sense of self and consciousness\",\n          \"Can reflect on its own thoughts and emotions\",\n          \"May exhibit creativity and intuition\"\n        ],\n        \"right_title\": \"Autonomous AI\",\n        \"right_points\": [\n          \"Operates independently without human intervention\",\n          \"Can make decisions based on complex data analysis\",\n          \"May involve advanced machine learning techniques\"\n        ]\n      },\n      \"bullets\": [\n        \"Self-aware AI systems possess a sense of self and consciousness, enabling them to reflect on their own thoughts and emotions.\",\n        \"Autonomous AI systems operate independently without human intervention, relying on complex data analysis to make decisions.\",\n        \"Both types of AI have the potential to revolutionize various industries and aspects of life.\"\n      ],\n      \"speaker_notes\": \"Self-aware and autonomous AI systems are two distinct types of agentic AI with unique characteristics.\",\n      \"code_snippet\": \"\"\n    }\n  ]\n}\n```",
+    "topic": "Agentic AI | Types of Agentic AI",
+    "model": "llama-3.1-8b-instant",
+    "task": "slideshow_section",
+    "label": "SlideShow Section: Agentic AI | Types of Agentic AI",
+    "usage": {
+      "prompt_tokens": 563,
+      "completion_tokens": 457,
+      "total_tokens": 1020
+    }
+  },
+  "4c9bec2c8f0c66385ec85612b6ab8fec1e5012cacc68b6488b91d590234cf293": {
+    "response": "```json\n{\n  \"slides\": [\n    {\n      \"title\": \"Real-World Examples of Agentic AI\",\n      \"representation\": \"two_column\",\n      \"layout_payload\": {\n        \"left_title\": \"Companies\",\n        \"left_items\": [\n          \"Amazon (Alexa)\",\n          \"Google (Google Assistant)\",\n          \"Microsoft (Cortana)\",\n          \"Facebook (M)\",\n          \"IBM (Watson)\"\n        ],\n        \"right_title\": \"Applications\",\n        \"right_items\": [\n          \"[S1] Virtual assistants\",\n          \"Chatbots for customer support\",\n          \"Personalized recommendations\",\n          \"Automated decision-making\",\n          \"Scientific research assistance\"\n        ]\n      },\n      \"bullets\": [\n        \"Agentic AI is being used in various industries, including retail, healthcare, and finance.\",\n        \"These applications are transforming the way businesses interact with customers and make decisions.\",\n        \"Agentic AI is also being used to improve scientific research and discovery.\"\n      ],\n      \"speaker_notes\": \"Note the diversity of applications and industries where agentic AI is being used.\",\n      \"code_snippet\": \"\",\n      \"code_language\": \"\"\n    },\n    {\n      \"title\": \"Case Study: IBM Watson\",\n      \"representation\": \"comparison\",\n      \"layout_payload\": {\n        \"left_title\": \"Traditional AI\",\n        \"left_points\": [\n          \"Limited to pre-programmed tasks\",\n          \"No ability to learn from experience\",\n          \"No autonomy or decision-making\"\n        ],\n        \"right_title\": \"Agentic AI (IBM Watson)\",\n        \"right_points\": [\n          \"Can learn from experience and adapt\",\n          \"Can make decisions with autonomy\",\n          \"Can interact with humans in a more natural way\"\n        ]\n      },\n      \"bullets\": [\n        \"IBM Watson is an example of agentic AI in practice.\",\n        \"It has been used in various applications, including customer service and healthcare.\",\n        \"Watson's ability to learn and adapt makes it a powerful tool for businesses.\"\n      ],\n      \"speaker_notes\": \"Note the key differences between traditional AI and agentic AI.\",\n      \"code_snippet\": \"\",\n      \"code_language\": \"\"\n    },\n    {\n      \"title\": \"Code Example: Agentic AI in Python\",\n      \"representation\": \"bullet\",\n      \"layout_payload\": {\"items\": [\"import random\", \"import numpy as np\", \"class Agent:\", \"  def __init__(self):\", \"    self.memory = []\", \"  def learn(self, experience):\", \"    self.memory.append(experience)\"]},\n      \"bullets\": [\n        \"This code snippet demonstrates a basic agentic AI system in Python.\",\n        \"The system uses a memory-based approach to learn from experience.\",\n        \"This is a simplified example and real-world agentic AI systems are much more complex.\"\n      ],\n      \"speaker_notes\": \"Note the simplicity of this example and how it can be expanded upon.\",\n      \"code_snippet\": \"import random\\nimport numpy as np\\nclass Agent:\\n  def __init__(self):\\n    self.memory = []\\n  def learn(self, experience):\\n    self.memory.append(experience)\",\n      \"code_language\": \"python\"\n    },\n    {\n      \"title\": \"Challenges and Lessons Learned\",\n      \"representation\": \"bullet\",\n      \"layout_payload\": {\"items\": [\"Ensuring transparency and explainability\", \"Addressing bias and fairness\", \"Managing complexity and scalability\"]},\n      \"bullets\": [\n        \"Implementing agentic AI in practice can be challenging.\",\n        \"Ensuring transparency and explainability is crucial for trust and adoption.\",\n        \"Addressing bias and fairness is essential for ensuring that agentic AI systems are equitable and just.\"\n      ],\n      \"speaker_notes\": \"Note the importance of these challenges and how they can be addressed.\",\n      \"code_snippet\": \"\",\n      \"code_language\": \"\"\n    }\n  ]\n}\n```\n\nReferences:\n\n[S1] \"Virtual assistants: A review of the current state of the art\" by [Author], [Year]",
+    "topic": "Agentic AI | Implementing Agentic AI in Practice",
+    "model": "llama-3.1-8b-instant",
+    "task": "slideshow_section",
+    "label": "SlideShow Section: Agentic AI | Implementing Agentic AI in Practice",
+    "usage": {
+      "prompt_tokens": 636,
+      "completion_tokens": 839,
+      "total_tokens": 1475
+    }
+  },
+  "c1235ff08a31e32d37c158cdc2339a82462cb5df6503d681702cb14ed74d1833": {
+    "response": "{\n  \"title\": \"Understanding Agentic AI Basics\",\n  \"speakers\": [\n    {\"name\": \"Ava\", \"role\": \"Concept Architect\"},\n    {\"name\": \"Noah\", \"role\": \"Practical Engineer\"}\n  ],\n  \"dialogue\": [\n    {\"speaker\": \"Ava\", \"text\": \"Welcome to our discussion on Agentic AI. In today's world, AI systems are increasingly making decisions on our behalf, from personalized product recommendations to autonomous vehicles.\"},\n    {\"speaker\": \"Noah\", \"text\": \"That's right, Ava. As we explore Agentic AI, we'll see how these systems are not just passive tools, but active agents that can learn, adapt, and interact with their environment.\"},\n    {\"speaker\": \"Ava\", \"text\": \"This slide sets the stage for our presentation roadmap, which we'll cover in three core sections. We'll start with the fundamentals, then move on to practical understanding, and finally, explore real-world applicability.\"},\n    {\"speaker\": \"Noah\", \"text\": \"Our goal is to provide a clear and progressive understanding of Agentic AI, highlighting key concepts, trade-offs, and the implications for various industries and applications.\"},\n    {\"speaker\": \"Ava\", \"text\": \"Throughout this presentation, we'll focus on the 'why' behind Agentic AI, rather than just the 'how'. We'll examine the benefits and challenges of these systems, and how they're being used today.\"},\n    {\"speaker\": \"Noah\", \"text\": \"So, let's dive in and explore the world of Agentic AI together.\"}\n  ],\n  \"summary\": \"Agentic AI systems are active agents that learn, adapt, and interact with their environment, with applications in various industries and real-world use cases.\"\n}",
+    "topic": "Agentic AI | slide 1",
+    "model": "llama-3.1-8b-instant",
+    "task": "video_slide_script",
+    "label": "Video Slide Script: Agentic AI | 1",
+    "usage": {
+      "prompt_tokens": 456,
+      "completion_tokens": 372,
+      "total_tokens": 828
+    }
+  },
+  "05c3adcc0eca1c8e7521835849d462cfd0b0856d4b0fc34d21cb1c8fcbe48f5e": {
+    "response": "{\n  \"title\": \"Defining Agentic AI\",\n  \"speakers\": [\n    {\"name\": \"Ava\", \"role\": \"Concept Architect\"},\n    {\"name\": \"Noah\", \"role\": \"Practical Engineer\"}\n  ],\n  \"dialogue\": [\n    {\"speaker\": \"Ava\", \"text\": \"Welcome to the world of agentic AI, where machines can think and act on their own. But what exactly does that mean?\" },\n    {\"speaker\": \"Noah\", \"text\": \"Let's break it down. Agentic AI refers to a type of AI that exhibits autonomous behavior, decision-making, and self-awareness.\" },\n    {\"speaker\": \"Ava\", \"text\": \"That's right. And it's not just about reacting to situations, it's about being proactive and taking actions to achieve goals.\" },\n    {\"speaker\": \"Noah\", \"text\": \"For example, an autonomous vehicle that can navigate through traffic and avoid obstacles is an example of agentic AI in action.\" },\n    {\"speaker\": \"Ava\", \"text\": \"So, what are the key characteristics of agentic AI? Let's take a look at this slide.\" },\n    {\"speaker\": \"Noah\", \"text\": \"Agentic AI systems are proactive, they can learn from experience, and they have a sense of agency, meaning they can make decisions and take actions independently.\" }\n  ],\n  \"summary\": \"Agentic AI is a type of AI that exhibits autonomous behavior, decision-making, and self-awareness, with the potential to revolutionize various industries.\"\n}",
+    "topic": "Agentic AI | slide 2",
+    "model": "llama-3.1-8b-instant",
+    "task": "video_slide_script",
+    "label": "Video Slide Script: Agentic AI | 2",
+    "usage": {
+      "prompt_tokens": 570,
+      "completion_tokens": 330,
+      "total_tokens": 900
+    }
+  },
+  "f2808bd9379db781b518875f7b8c40dad744f2cc012f435a7190145ba9ab1a00": {
+    "response": "{\n  \"title\": \"Agentic AI: Key Features and Design Considerations\",\n  \"speakers\": [\n    {\"name\": \"Ava\", \"role\": \"Concept Architect\"},\n    {\"name\": \"Noah\", \"role\": \"Practical Engineer\"}\n  ],\n  \"dialogue\": [\n    {\"speaker\": \"Ava\", \"text\": \"As we explore the capabilities of agentic AI, let's examine its key features on this slide.\"},\n    {\"speaker\": \"Noah\", \"text\": \"Autonomy is a crucial aspect of agentic AI. It enables systems to operate independently and make decisions without human intervention.\"},\n    {\"speaker\": \"Ava\", \"text\": \"Another important feature is self-awareness, which allows agentic AI systems to reflect on their actions and goals.\"},\n    {\"speaker\": \"Noah\", \"text\": \"Proactivity is also a key feature, enabling systems to take the initiative to achieve their goals and adapt to changing situations.\"},\n    {\"speaker\": \"Ava\", \"text\": \"And finally, learning is a critical component of agentic AI, allowing systems to improve their performance over time.\"},\n    {\"speaker\": \"Noah\", \"text\": \"Now, let's take a look at this code snippet, which demonstrates a basic example of an agentic AI system in Python.\"},\n    {\"speaker\": \"Ava\", \"text\": \"This code defines a class called AgenticAI, which has methods for setting goals and achieving them. The example shows how to create an instance of the class and set a goal to learn from experience.\"},\n    {\"speaker\": \"Noah\", \"text\": \"The code snippet is a simplified representation of how agentic AI systems can be designed to operate independently and achieve their goals.\"},\n    {\"speaker\": \"Ava\", \"text\": \"As we design and implement agentic AI systems, it's essential to consider their safety and reliability, as well as their ability to interact with humans in a natural and intuitive way.\"},\n    {\"speaker\": \"Noah\", \"text\": \"Agentic AI systems can also provide personalized services and recommendations based on individual preferences and behavior.\"},\n    {\"speaker\": \"Ava\", \"text\": \"However, to build trust and confidence in their decision-making processes, it's crucial to design agentic AI systems that are transparent and explainable.\"},\n    {\"speaker\": \"Noah\", \"text\": \"By considering these key features and design considerations, we can create more effective and responsible agentic AI systems.\"},\n    {\"speaker\": \"Ava\", \"text\": \"So, let's summarize the key takeaways from this slide: agentic AI systems can operate independently, interact with humans naturally, and provide personalized services, but require careful design and testing for safety and reliability.\"},\n    {\"speaker\": \"Noah\", \"text\": \"And remember, the code snippet we examined is just a starting point for designing more complex agentic AI systems.\"}\n  ],\n  \"summary\": \"Agentic AI systems require careful design and testing to ensure their safety, reliability, and ability to interact with humans in a natural and intuitive way.\"\n}",
+    "topic": "Agentic AI | slide 3",
+    "model": "llama-3.1-8b-instant",
+    "task": "video_slide_script",
+    "label": "Video Slide Script: Agentic AI | 3",
+    "usage": {
+      "prompt_tokens": 639,
+      "completion_tokens": 639,
+      "total_tokens": 1278
+    }
+  },
+  "4fd3d32f6f143156402e3e5a333fbc6706bcf2852dba319de122b23b2ee77472": {
+    "response": "{\n  \"title\": \"Goal-Oriented Agentic AI\",\n  \"speakers\": [\n    {\"name\": \"Ava\", \"role\": \"Concept Architect\"},\n    {\"name\": \"Noah\", \"role\": \"Practical Engineer\"}\n  ],\n  \"dialogue\": [\n    {\"speaker\": \"Ava\", \"text\": \"In the real world, goal-oriented agentic AI is already making a significant impact. For instance, virtual assistants like Siri and Alexa are designed to achieve specific goals, such as answering questions or completing tasks.\"},\n    {\"speaker\": \"Noah\", \"text\": \"That's right. These systems utilize planning and decision-making algorithms to navigate complex tasks, like understanding natural language and generating responses.\"},\n    {\"speaker\": \"Ava\", \"text\": \"And it's not just limited to virtual assistants. Personalized product recommendation systems and autonomous vehicles are also examples of goal-oriented agentic AI.\"},\n    {\"speaker\": \"Noah\", \"text\": \"These systems can adapt to changing environments, making them more resilient and effective in achieving their goals.\"},\n    {\"speaker\": \"Ava\", \"text\": \"This adaptability is crucial in real-world applications, where unexpected events can occur and require the AI system to adjust its plan accordingly.\"},\n    {\"speaker\": \"Noah\", \"text\": \"For example, in autonomous vehicles, the AI system must be able to adapt to changing traffic conditions, road closures, or even unexpected pedestrian behavior.\"}\n  ],\n  \"summary\": \"Goal-oriented agentic AI prioritizes achieving specific objectives, utilizing planning and decision-making algorithms to navigate complex tasks and adapt to changing environments.\"\n}",
+    "topic": "Agentic AI | slide 4",
+    "model": "llama-3.1-8b-instant",
+    "task": "video_slide_script",
+    "label": "Video Slide Script: Agentic AI | 4",
+    "usage": {
+      "prompt_tokens": 530,
+      "completion_tokens": 336,
+      "total_tokens": 866
+    }
+  },
+  "517f0a6153ff535e6d0473d0080e001726a964a5579c1f25bab977f233648e58": {
+    "response": "{\n  \"title\": \"Agentic AI Types: Self-Aware and Autonomous\",\n  \"speakers\": [\n    {\"name\": \"Ava\", \"role\": \"Concept Architect\"},\n    {\"name\": \"Noah\", \"role\": \"Practical Engineer\"}\n  ],\n  \"dialogue\": [\n    {\"speaker\": \"Ava\", \"text\": \"As we explore agentic AI, it's essential to understand the differences between self-aware and autonomous systems. Let's dive into the characteristics of each.\"},\n    {\"speaker\": \"Noah\", \"text\": \"Self-aware AI systems are unique because they can reflect on their own thoughts and emotions, enabling creativity and intuition.\"},\n    {\"speaker\": \"Ava\", \"text\": \"That's fascinating. Autonomous AI systems, on the other hand, operate independently without human intervention, relying on complex data analysis to make decisions.\"},\n    {\"speaker\": \"Noah\", \"text\": \"This is where machine learning comes into play, allowing autonomous AI to adapt and improve over time.\"},\n    {\"speaker\": \"Ava\", \"text\": \"Both types of AI have the potential to revolutionize industries and aspects of life, but it's crucial to understand their distinct capabilities.\"},\n    {\"speaker\": \"Noah\", \"text\": \"For instance, self-aware AI could enhance human-AI collaboration, while autonomous AI could optimize complex systems like supply chains or healthcare management.\"}\n  ],\n  \"summary\": \"Self-aware and autonomous AI systems have unique characteristics, enabling them to revolutionize various industries and aspects of life.\"\n}",
+    "topic": "Agentic AI | slide 5",
+    "model": "llama-3.1-8b-instant",
+    "task": "video_slide_script",
+    "label": "Video Slide Script: Agentic AI | 5",
+    "usage": {
+      "prompt_tokens": 559,
+      "completion_tokens": 318,
+      "total_tokens": 877
+    }
+  },
+  "655f4a28334c90279bda1cb071078e75ed48e3ef20a9d8fb3707b9ba702e8b14": {
+    "response": "{\n  \"title\": \"Agentic AI in Action\",\n  \"speakers\": [\n    {\"name\": \"Ava\", \"role\": \"Concept Architect\"},\n    {\"name\": \"Noah\", \"role\": \"Practical Engineer\"}\n  ],\n  \"dialogue\": [\n    {\"speaker\": \"Ava\", \"text\": \"As we explore agentic AI, it's essential to see how it's being applied in real-world scenarios. This slide highlights some notable examples.\"},\n    {\"speaker\": \"Noah\", \"text\": \"Let's take a look at some of the companies already using agentic AI, such as Amazon with Alexa, Google with Google Assistant, and Microsoft with Cortana.\"},\n    {\"speaker\": \"Ava\", \"text\": \"These virtual assistants are just one example of how agentic AI is transforming the way businesses interact with customers.\"},\n    {\"speaker\": \"Noah\", \"text\": \"In addition to virtual assistants, agentic AI is also being used for chatbots in customer support, personalized recommendations, and even automated decision-making.\"},\n    {\"speaker\": \"Ava\", \"text\": \"Note the diversity of applications and industries where agentic AI is being used, from retail to healthcare and finance.\"},\n    {\"speaker\": \"Noah\", \"text\": \"These applications are not only improving customer experiences but also driving business efficiency and innovation.\"}\n  ],\n  \"summary\": \"Agentic AI is being applied in various industries and applications, transforming the way businesses interact with customers and make decisions.\"\n}",
+    "topic": "Agentic AI | slide 6",
+    "model": "llama-3.1-8b-instant",
+    "task": "video_slide_script",
+    "label": "Video Slide Script: Agentic AI | 6",
+    "usage": {
+      "prompt_tokens": 533,
+      "completion_tokens": 312,
+      "total_tokens": 845
+    }
+  },
+  "5644c644848613d58a8b8202cb2a2f69bae57332fbd70108a2b2c2d9b8ef5110": {
+    "response": "{\n  \"title\": \"Agentic AI in Practice\",\n  \"speakers\": [\n    {\"name\": \"Ava\", \"role\": \"Concept Architect\"},\n    {\"name\": \"Noah\", \"role\": \"Practical Engineer\"}\n  ],\n  \"dialogue\": [\n    {\"speaker\": \"Ava\", \"text\": \"Let's take a look at IBM Watson, a notable example of agentic AI in action.\"},\n    {\"speaker\": \"Noah\", \"text\": \"That's right, Ava. Watson's ability to learn and adapt makes it a powerful tool for businesses.\"},\n    {\"speaker\": \"Ava\", \"text\": \"Exactly. And if we compare it to traditional AI, we can see some key differences.\"},\n    {\"speaker\": \"Noah\", \"text\": \"Traditional AI is limited to pre-programmed tasks, has no ability to learn from experience, and no autonomy or decision-making.\"},\n    {\"speaker\": \"Ava\", \"text\": \"In contrast, agentic AI like Watson can learn from experience, make decisions with autonomy, and interact with humans in a more natural way.\"},\n    {\"speaker\": \"Noah\", \"text\": \"This makes Watson a valuable asset for applications like customer service and healthcare, where adaptability and decision-making are crucial.\"}\n  ],\n  \"summary\": \"IBM Watson exemplifies agentic AI's ability to learn, adapt, and make decisions autonomously, making it a powerful tool for businesses.\"\n}",
+    "topic": "Agentic AI | slide 7",
+    "model": "llama-3.1-8b-instant",
+    "task": "video_slide_script",
+    "label": "Video Slide Script: Agentic AI | 7",
+    "usage": {
+      "prompt_tokens": 529,
+      "completion_tokens": 301,
+      "total_tokens": 830
+    }
+  },
+  "b9250d36d920d2dbc23b5738e568fcd2dd0a8d12f547c711e334986cae9a7835": {
+    "response": "{\n  \"title\": \"Agentic AI Next Steps\",\n  \"speakers\": [\n    {\"name\": \"Ava\", \"role\": \"Concept Architect\"},\n    {\"name\": \"Noah\", \"role\": \"Practical Engineer\"}\n  ],\n  \"dialogue\": [\n    {\"speaker\": \"Ava\", \"text\": \"As we conclude our exploration of Agentic AI, let's focus on what matters most: implementation and practical application.\"},\n    {\"speaker\": \"Noah\", \"text\": \"To get started, you'll want to recall the three major areas we covered: intention, autonomy, and self-awareness.\"},\n    {\"speaker\": \"Ava\", \"text\": \"These areas are crucial for building AI systems that can learn, adapt, and make decisions like humans.\"},\n    {\"speaker\": \"Noah\", \"text\": \"Key takeaways to retain include understanding the importance of intention, designing for autonomy, and integrating self-awareness into your AI architecture.\"},\n    {\"speaker\": \"Ava\", \"text\": \"For deeper study and practical application, consider exploring the intersection of Agentic AI and your specific industry or domain.\"},\n    {\"speaker\": \"Noah\", \"text\": \"This will help you identify opportunities to apply Agentic AI principles and drive meaningful innovation in your field.\"}\n  ],\n  \"summary\": \"Recap Agentic AI's three major areas and key takeaways for implementation and decision-making.\"\n}",
+    "topic": "Agentic AI | slide 8",
+    "model": "llama-3.1-8b-instant",
+    "task": "video_slide_script",
+    "label": "Video Slide Script: Agentic AI | 8",
+    "usage": {
+      "prompt_tokens": 464,
+      "completion_tokens": 294,
+      "total_tokens": 758
+    }
   }
 }

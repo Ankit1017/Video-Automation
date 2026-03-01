@@ -79,6 +79,8 @@ class _VideoBuilder(Protocol):
         audio_bytes: bytes,
         template_key: str | None = None,
         animation_style: str | None = None,
+        render_mode: str | None = None,
+        allow_fallback: bool | None = None,
     ) -> tuple[bytes | None, str | None]:
         ...
 
@@ -180,12 +182,16 @@ def build_video_synthesize_callback(service: _VideoSynthesizer) -> VideoSynthesi
 
 def build_video_build_callback(service: _VideoBuilder) -> VideoBuildFn:
     def _callback(topic: str, video_payload: VideoPayload, audio_bytes: bytes) -> tuple[bytes | None, str | None]:
+        metadata = video_payload.get("metadata", {})
+        metadata_map = metadata if isinstance(metadata, dict) else {}
         return service.build_video_mp4(
             topic=topic,
             video_payload=video_payload,
             audio_bytes=audio_bytes,
             template_key=str(video_payload.get("video_template", "standard")),
             animation_style=str(video_payload.get("animation_style", "smooth")),
+            render_mode=str(video_payload.get("render_mode", "avatar_conversation")),
+            allow_fallback=bool(metadata_map.get("avatar_allow_fallback", True)),
         )
 
     return _callback

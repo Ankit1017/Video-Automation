@@ -200,6 +200,53 @@ def _verify_media_asset(*, result: AgentAssetResult, tool: AgentToolDefinition) 
                 issues.append(_issue("Video slides are missing.", f"sections.{ARTIFACT_VIDEO_PAYLOAD}.data.slides"))
             if not isinstance(scripts, list) or not scripts:
                 issues.append(_issue("Video slide scripts are missing.", f"sections.{ARTIFACT_VIDEO_PAYLOAD}.data.slide_scripts"))
+            checks_run.append("video_speaker_roster_present")
+            speaker_roster = payload.get("speaker_roster", []) if isinstance(payload, dict) else []
+            if not isinstance(speaker_roster, list) or len(speaker_roster) < 2:
+                issues.append(
+                    _issue(
+                        "Video speaker_roster must include at least 2 speakers.",
+                        f"sections.{ARTIFACT_VIDEO_PAYLOAD}.data.speaker_roster",
+                    )
+                )
+            checks_run.append("video_conversation_timeline_present")
+            timeline = payload.get("conversation_timeline", {}) if isinstance(payload, dict) else {}
+            if not isinstance(timeline, dict):
+                issues.append(
+                    _issue(
+                        "Video conversation_timeline must be an object.",
+                        f"sections.{ARTIFACT_VIDEO_PAYLOAD}.data.conversation_timeline",
+                    )
+                )
+            else:
+                turns = timeline.get("turns", [])
+                if not isinstance(turns, list) or not turns:
+                    issues.append(
+                        _issue(
+                            "Video conversation_timeline.turns must be non-empty.",
+                            f"sections.{ARTIFACT_VIDEO_PAYLOAD}.data.conversation_timeline.turns",
+                        )
+                    )
+                else:
+                    _validate_video_timeline_turns(
+                        turns=turns,
+                        issues=issues,
+                        path_prefix=f"sections.{ARTIFACT_VIDEO_PAYLOAD}.data.conversation_timeline.turns",
+                    )
+                segments = timeline.get("audio_segments", [])
+                if isinstance(segments, list) and segments:
+                    _validate_video_timeline_segments(
+                        segments=segments,
+                        issues=issues,
+                        path_prefix=f"sections.{ARTIFACT_VIDEO_PAYLOAD}.data.conversation_timeline.audio_segments",
+                    )
+                    if isinstance(turns, list) and turns and len(segments) < len(turns):
+                        issues.append(
+                            _issue(
+                                "Audio segment count is lower than timeline turn count.",
+                                f"sections.{ARTIFACT_VIDEO_PAYLOAD}.data.conversation_timeline.audio_segments",
+                            )
+                        )
         checks_run.append("video_audio_artifact")
         audio_data = _section_data(result=result, key=ARTIFACT_VIDEO_AUDIO)
         if audio_data is None and result.audio_bytes is None and not result.audio_error:
@@ -247,6 +294,71 @@ def _warning_issue(message: str, path: str) -> VerificationIssue:
         "message": message,
         "path": path,
     }
+
+
+def _validate_video_timeline_turns(*, turns: list[object], issues: list[VerificationIssue], path_prefix: str) -> None:
+    previous_start = -1
+    for index, turn in enumerate(turns):
+        path = f"{path_prefix}[{index}]"
+        if not isinstance(turn, dict):
+            issues.append(_issue("Each timeline turn must be an object.", path))
+            continue
+        speaker = " ".join(str(turn.get("speaker", "")).split()).strip()
+        text = " ".join(str(turn.get("text", "")).split()).strip()
+        if not speaker:
+            issues.append(_issue("Timeline turn speaker is required.", f"{path}.speaker"))
+        if not text:
+            issues.append(_issue("Timeline turn text is required.", f"{path}.text"))
+        start_ms = _safe_int(turn.get("start_ms"), default=-1)
+        end_ms = _safe_int(turn.get("end_ms"), default=-1)
+        if start_ms < 0 or end_ms < 0:
+            issues.append(_issue("Timeline turn start_ms/end_ms must be non-negative integers.", path))
+            continue
+        if end_ms < start_ms:
+            issues.append(_issue("Timeline turn end_ms must be >= start_ms.", path))
+        if previous_start > start_ms:
+            issues.append(_issue("Timeline turns must be monotonic by start_ms.", path))
+        previous_start = start_ms
+        visual_ref = turn.get("visual_ref", {})
+        if not isinstance(visual_ref, dict):
+            issues.append(_issue("Timeline turn visual_ref must be an object.", f"{path}.visual_ref"))
+            continue
+        slide_index = _safe_int(visual_ref.get("slide_index"), default=-1)
+        if slide_index <= 0:
+            issues.append(_issue("Timeline turn visual_ref.slide_index must be > 0.", f"{path}.visual_ref.slide_index"))
+
+
+def _validate_video_timeline_segments(*, segments: list[object], issues: list[VerificationIssue], path_prefix: str) -> None:
+    previous_start = -1
+    for index, segment in enumerate(segments):
+        path = f"{path_prefix}[{index}]"
+        if not isinstance(segment, dict):
+            issues.append(_issue("Each audio segment must be an object.", path))
+            continue
+        segment_ref = " ".join(str(segment.get("segment_ref", "")).split()).strip()
+        if not segment_ref:
+            issues.append(_issue("Audio segment segment_ref is required.", f"{path}.segment_ref"))
+        start_ms = _safe_int(segment.get("start_ms"), default=-1)
+        end_ms = _safe_int(segment.get("end_ms"), default=-1)
+        if start_ms < 0 or end_ms < 0:
+            issues.append(_issue("Audio segment start_ms/end_ms must be non-negative integers.", path))
+            continue
+        if end_ms < start_ms:
+            issues.append(_issue("Audio segment end_ms must be >= start_ms.", path))
+        if previous_start > start_ms:
+            issues.append(_issue("Audio segments must be monotonic by start_ms.", path))
+        previous_start = start_ms
+
+
+def _safe_int(value: object, *, default: int) -> int:
+    try:
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, (int, float, str)):
+            return int(value)
+        return int(str(value))
+    except (TypeError, ValueError):
+        return default
 
 
 def _verify_profile(tool: AgentToolDefinition) -> tuple[str, VerificationIssue | None]:

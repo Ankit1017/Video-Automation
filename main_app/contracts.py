@@ -49,16 +49,76 @@ class VideoSlideScript(TypedDict, total=False):
     summary: str
     dialogue: list[DialogueTurn]
     estimated_duration_sec: float
+    slide_title: str
+
+
+class VideoVisualRef(TypedDict, total=False):
+    slide_index: int
+    representation: SlideRepresentation
+    item_index: int
+    code_line_start: int
+    code_line_end: int
+
+
+class VideoConversationTurn(TypedDict, total=False):
+    turn_index: int
+    speaker: str
+    text: str
+    slide_index: int
+    start_ms: int
+    end_ms: int
+    estimated_duration_ms: int
+    visual_ref: VideoVisualRef
+    segment_ref: str
+    mouth_cues: list[dict[str, JSONValue]]
+
+
+class DialogueAudioSegment(TypedDict, total=False):
+    segment_ref: str
+    speaker: str
+    start_ms: int
+    end_ms: int
+    duration_ms: int
+    text: str
+    cache_hit: bool
+
+
+class VideoRenderProfile(TypedDict, total=False):
+    profile_key: str
+    width: int
+    height: int
+    fps: int
+    avatar_scale: float
+    animation_level: str
+    gpu_available: bool
+    gpu_memory_mb: int
+
+
+class VideoConversationTimeline(TypedDict, total=False):
+    turns: list[VideoConversationTurn]
+    audio_segments: list[DialogueAudioSegment]
+    total_duration_ms: int
+    turn_count: int
+    speaker_count: int
+    generated_with: str
 
 
 class VideoPayload(TypedDict, total=False):
     topic: str
+    title: str
     slides: list[SlideContent]
     slide_scripts: list[VideoSlideScript]
     speakers: list[AudioSpeaker]
+    speaker_roster: list[AudioSpeaker]
     narrative_style: str
+    conversation_style: str
     video_template: str
     animation_style: str
+    render_mode: Literal["avatar_conversation", "classic_slides"]
+    conversation_timeline: VideoConversationTimeline
+    visual_refs: list[VideoVisualRef]
+    render_profile: VideoRenderProfile
+    metadata: dict[str, JSONValue]
 
 
 class AssetSection(TypedDict, total=False):

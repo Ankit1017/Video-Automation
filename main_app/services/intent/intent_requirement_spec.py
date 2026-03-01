@@ -285,8 +285,35 @@ REQUIREMENT_SPEC: RequirementSpecMap = {
                 "default": "auto",
                 "options": ["auto", "classic", "visual"],
             },
+            "render_mode": {
+                "label": "Render Mode",
+                "type": "enum",
+                "default": "avatar_conversation",
+                "options": ["avatar_conversation", "classic_slides"],
+            },
+            "avatar_enable_subtitles": {
+                "label": "Avatar Subtitles",
+                "type": "bool",
+                "default": True,
+            },
+            "avatar_style_pack": {
+                "label": "Avatar Style Pack",
+                "type": "enum",
+                "default": "default",
+                "options": ["default", "compact"],
+            },
+            "avatar_allow_fallback": {
+                "label": "Avatar Auto Fallback",
+                "type": "bool",
+                "default": True,
+            },
             "youtube_prompt": {
                 "label": "YouTube Style Prompt",
+                "type": "bool",
+                "default": False,
+            },
+            "hinglish_script": {
+                "label": "Use Hinglish Script",
                 "type": "bool",
                 "default": False,
             },

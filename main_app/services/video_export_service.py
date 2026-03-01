@@ -7,13 +7,24 @@ from pathlib import Path
 import shutil
 import tempfile
 from time import perf_counter
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from main_app.shared.slideshow.representation_normalizer import (
     is_progressive_representation,
     normalize_slide_representation,
 )
-from main_app.contracts import SlideContent, VideoPayload
+from main_app.contracts import (
+    DialogueAudioSegment,
+    JSONValue,
+    SlideContent,
+    VideoConversationTimeline,
+    VideoPayload,
+    VideoRenderProfile,
+)
+from main_app.services.video_avatar_lipsync_service import VideoAvatarLipsyncService
+from main_app.services.video_avatar_overlay_service import VideoAvatarOverlayService
+from main_app.services.video_dialogue_audio_service import VideoDialogueAudioService
+from main_app.services.video_render_profile_service import VideoRenderProfileService
 from main_app.services.observability_service import ensure_request_id
 from main_app.services.telemetry_service import ObservabilityEvent, TelemetryService
 from main_app.services.text_sanitizer import sanitize_text
@@ -85,6 +96,10 @@ class VideoExportService:
 
     def __init__(self, *, telemetry_service: TelemetryService | None = None) -> None:
         self._telemetry_service = telemetry_service
+        self._render_profile_service = VideoRenderProfileService()
+        self._dialogue_audio_service = VideoDialogueAudioService()
+        self._avatar_lipsync_service = VideoAvatarLipsyncService()
+        self._avatar_overlay_service = VideoAvatarOverlayService()
 
     def build_video_mp4(
         self,
@@ -94,6 +109,9 @@ class VideoExportService:
         audio_bytes: bytes,
         template_key: str | None = None,
         animation_style: str | None = None,
+        render_mode: str | None = None,
+        render_profile: dict[str, object] | None = None,
+        allow_fallback: bool | None = None,
     ) -> tuple[bytes | None, str | None]:
         request_id = ensure_request_id()
         started_at = perf_counter()
@@ -109,6 +127,7 @@ class VideoExportService:
                             "topic": topic,
                             "template_key": template_key or "",
                             "animation_style": animation_style or "",
+                            "render_mode": render_mode or str(video_payload.get("render_mode", "")),
                         },
                     )
                 )
@@ -132,12 +151,52 @@ class VideoExportService:
             video_payload=video_payload,
             selected_template_key=selected_template_key,
         )
+        selected_render_mode = self._resolve_render_mode(render_mode=render_mode, video_payload=video_payload)
+        raw_metadata = video_payload.get("metadata", {})
+        metadata = cast(dict[str, JSONValue], raw_metadata if isinstance(raw_metadata, dict) else {})
+        video_payload["metadata"] = metadata
+        avatar_subtitles = bool(
+            metadata.get("avatar_enable_subtitles", True)
+        )
+        avatar_style_pack = " ".join(
+            str(metadata.get("avatar_style_pack", "default")).split()
+        ).strip().lower() or "default"
+        should_allow_fallback = (
+            bool(allow_fallback)
+            if allow_fallback is not None
+            else bool(metadata.get("avatar_allow_fallback", _env_flag("VIDEO_AVATAR_ALLOW_FALLBACK", True)))
+        )
+        selected_profile = self._coerce_render_profile(render_profile) if render_profile is not None else self._render_profile_service.select_profile()
+        video_payload["render_profile"] = selected_profile
+        video_payload["render_mode"] = selected_render_mode
+        applied_width = _safe_int(selected_profile.get("width"), default=self._WIDTH)
+        applied_height = _safe_int(selected_profile.get("height"), default=self._HEIGHT)
+        applied_fps = _safe_int(selected_profile.get("fps"), default=self._FPS)
+        previous_width = self._WIDTH
+        previous_height = self._HEIGHT
+        previous_fps = self._FPS
+        self._WIDTH = max(640, applied_width)
+        self._HEIGHT = max(360, applied_height)
+        self._FPS = max(15, applied_fps)
+        metadata["render_mode_requested"] = selected_render_mode
+        metadata["render_profile_key"] = str(selected_profile.get("profile_key", "unknown"))
+        metadata["render_resolution"] = f"{self._WIDTH}x{self._HEIGHT}"
+        metadata["render_fps"] = self._FPS
+        metadata["avatar_allow_fallback"] = should_allow_fallback
+
+        if self._telemetry_service is not None:
+            self._telemetry_service.record_metric(
+                name="video_render_profile_selected_total",
+                value=1.0,
+                attrs={"profile_key": str(selected_profile.get("profile_key", "unknown"))},
+            )
         template = self._TEMPLATES[selected_template_key]
 
         audio_clip = None
         video_clip = None
         all_visual_clips: list[Any] = []
         render_root: Path | None = None
+        fallback_used = False
         try:
             render_root = self._create_render_workdir()
             audio_path = render_root / "narration.mp3"
@@ -151,24 +210,170 @@ class VideoExportService:
                 slide_scripts=video_payload.get("slide_scripts"),
                 audio_duration=audio_duration,
             )
-
-            for index, (slide, duration) in enumerate(zip(slides, slide_durations, strict=False), start=1):
-                slide_clips = self._build_slide_clips(
-                    slide=slide if isinstance(slide, dict) else {},
-                    topic=topic,
-                    index=index,
-                    total=len(slides),
-                    duration=float(duration),
-                    path_prefix=render_root / f"slide_{index:03d}",
-                    image_module=Image,
-                    draw_module=ImageDraw,
-                    font_module=ImageFont,
-                    image_clip_cls=ImageClip,
-                    moviepy_vfx=vfx,
-                    template=template,
-                    animation_style=selected_animation_style,
+            if self._telemetry_service is not None:
+                self._telemetry_service.record_event(
+                    ObservabilityEvent(
+                        event_name="video.conversation_timeline.start",
+                        component="export.video_mp4",
+                        status="started",
+                        timestamp=_now_iso(),
+                        attributes={"slide_count": len(slides)},
+                    )
                 )
-                all_visual_clips.extend(slide_clips)
+            timeline_map = self._timeline_turns_by_slide(video_payload=video_payload)
+            flat_timeline = [
+                turn
+                for turns in timeline_map.values()
+                for turn in turns
+            ]
+            if self._telemetry_service is not None:
+                timeline_payload_ref = self._telemetry_service.attach_payload(
+                    payload={"timeline_turns": flat_timeline},
+                    kind="video_conversation_timeline",
+                )
+                self._telemetry_service.record_event(
+                    ObservabilityEvent(
+                        event_name="video.conversation_timeline.end",
+                        component="export.video_mp4",
+                        status="ok",
+                        timestamp=_now_iso(),
+                        attributes={"turn_count": len(flat_timeline)},
+                        payload_ref=timeline_payload_ref,
+                    )
+                )
+            if self._telemetry_service is not None:
+                self._telemetry_service.record_event(
+                    ObservabilityEvent(
+                        event_name="video.dialogue_audio.start",
+                        component="export.video_mp4",
+                        status="started",
+                        timestamp=_now_iso(),
+                        attributes={"mode": selected_render_mode},
+                    )
+                )
+            segment_timing = self._dialogue_audio_service.build_segment_timing(
+                timeline=cast(VideoConversationTimeline | None, video_payload.get("conversation_timeline")),
+            )
+            segment_lookup = {
+                str(segment.get("segment_ref", "")).strip(): segment
+                for segment in segment_timing
+                if str(segment.get("segment_ref", "")).strip()
+            }
+            if self._telemetry_service is not None:
+                dialogue_payload_ref = self._telemetry_service.attach_payload(
+                    payload={"segment_timing": segment_timing},
+                    kind="video_dialogue_audio_segments",
+                )
+                self._telemetry_service.record_event(
+                    ObservabilityEvent(
+                        event_name="video.dialogue_audio.end",
+                        component="export.video_mp4",
+                        status="ok",
+                        timestamp=_now_iso(),
+                        attributes={"segment_count": len(segment_timing)},
+                        payload_ref=dialogue_payload_ref,
+                    )
+                )
+            render_mode_in_use = selected_render_mode
+
+            try:
+                for index, (slide, duration) in enumerate(zip(slides, slide_durations, strict=False), start=1):
+                    if render_mode_in_use == "avatar_conversation":
+                        slide_clips = self._build_avatar_slide_clips(
+                            slide=slide if isinstance(slide, dict) else {},
+                            topic=topic,
+                            index=index,
+                            total=len(slides),
+                            duration=float(duration),
+                            path_prefix=render_root / f"slide_{index:03d}",
+                            image_module=Image,
+                            draw_module=ImageDraw,
+                            font_module=ImageFont,
+                            image_clip_cls=ImageClip,
+                            moviepy_vfx=vfx,
+                            template=template,
+                            animation_style=selected_animation_style,
+                            timeline_turns=timeline_map.get(index, []),
+                            segment_lookup=segment_lookup,
+                            speaker_roster=cast(list[dict[str, str]], video_payload.get("speaker_roster", [])),
+                            subtitles_enabled=avatar_subtitles,
+                            avatar_style_pack=avatar_style_pack,
+                            render_profile=selected_profile,
+                        )
+                        if self._telemetry_service is not None:
+                            self._telemetry_service.record_event(
+                                ObservabilityEvent(
+                                    event_name="video.avatar_overlay.end",
+                                    component="export.video_mp4",
+                                    status="ok",
+                                    timestamp=_now_iso(),
+                                    attributes={
+                                        "slide_index": index,
+                                        "turns": len(timeline_map.get(index, [])),
+                                    },
+                                )
+                            )
+                    else:
+                        slide_clips = self._build_slide_clips(
+                            slide=slide if isinstance(slide, dict) else {},
+                            topic=topic,
+                            index=index,
+                            total=len(slides),
+                            duration=float(duration),
+                            path_prefix=render_root / f"slide_{index:03d}",
+                            image_module=Image,
+                            draw_module=ImageDraw,
+                            font_module=ImageFont,
+                            image_clip_cls=ImageClip,
+                            moviepy_vfx=vfx,
+                            template=template,
+                            animation_style=selected_animation_style,
+                        )
+                    all_visual_clips.extend(slide_clips)
+            except (OSError, RuntimeError, ValueError, TypeError) as avatar_exc:
+                if render_mode_in_use == "avatar_conversation" and should_allow_fallback:
+                    render_mode_in_use = "classic_slides"
+                    fallback_used = True
+                    all_visual_clips.clear()
+                    if self._telemetry_service is not None:
+                        self._telemetry_service.record_metric(
+                            name="video_avatar_fallback_total",
+                            value=1.0,
+                            attrs={"reason": type(avatar_exc).__name__},
+                        )
+                        payload_ref = self._telemetry_service.attach_payload(
+                            payload={"error": str(avatar_exc), "topic": topic},
+                            kind="video_avatar_fallback",
+                        )
+                        self._telemetry_service.record_event(
+                            ObservabilityEvent(
+                                event_name="video.avatar_fallback",
+                                component="export.video_mp4",
+                                status="degraded",
+                                timestamp=_now_iso(),
+                                attributes={"reason": type(avatar_exc).__name__},
+                                payload_ref=payload_ref,
+                            )
+                        )
+                    for index, (slide, duration) in enumerate(zip(slides, slide_durations, strict=False), start=1):
+                        slide_clips = self._build_slide_clips(
+                            slide=slide if isinstance(slide, dict) else {},
+                            topic=topic,
+                            index=index,
+                            total=len(slides),
+                            duration=float(duration),
+                            path_prefix=render_root / f"slide_{index:03d}",
+                            image_module=Image,
+                            draw_module=ImageDraw,
+                            font_module=ImageFont,
+                            image_clip_cls=ImageClip,
+                            moviepy_vfx=vfx,
+                            template=template,
+                            animation_style=selected_animation_style,
+                        )
+                        all_visual_clips.extend(slide_clips)
+                else:
+                    raise
 
             transition_sec = self._transition_seconds(animation_style=selected_animation_style)
             stitched_clips: list[Any] = []
@@ -194,6 +399,11 @@ class VideoExportService:
             if not output_path.exists():
                 return None, "Video rendering failed: output file was not produced."
             video_bytes = output_path.read_bytes()
+            metadata["render_mode_used"] = render_mode_in_use
+            metadata["avatar_fallback_used"] = fallback_used
+            metadata["video_output_bytes"] = len(video_bytes)
+            metadata["timeline_turn_count"] = len(flat_timeline)
+            metadata["timeline_segment_count"] = len(segment_timing)
             if self._telemetry_service is not None:
                 with self._telemetry_service.context_scope(request_id=request_id):
                     duration_ms = max((perf_counter() - started_at) * 1000.0, 0.0)
@@ -203,6 +413,9 @@ class VideoExportService:
                             "template_key": selected_template_key,
                             "animation_style": selected_animation_style,
                             "slide_count": len(slides),
+                            "render_mode": render_mode_in_use,
+                            "render_profile_key": str(selected_profile.get("profile_key", "unknown")),
+                            "avatar_fallback_used": fallback_used,
                         },
                         kind="video_export",
                     )
@@ -224,6 +437,12 @@ class VideoExportService:
                             "animation_style": selected_animation_style,
                         },
                     )
+                    if render_mode_in_use == "avatar_conversation":
+                        self._telemetry_service.record_metric(
+                            name="video_avatar_pipeline_duration_ms",
+                            value=duration_ms,
+                            attrs={"profile_key": str(selected_profile.get("profile_key", "unknown"))},
+                        )
                     self._telemetry_service.record_event(
                         ObservabilityEvent(
                             event_name="export.video.end",
@@ -236,6 +455,8 @@ class VideoExportService:
                                 "slide_count": len(slides),
                                 "template_key": selected_template_key,
                                 "animation_style": selected_animation_style,
+                                "render_mode": render_mode_in_use,
+                                "profile_key": str(selected_profile.get("profile_key", "unknown")),
                             },
                             payload_ref=payload_ref,
                         )
@@ -264,6 +485,9 @@ class VideoExportService:
                     )
             return None, f"Failed to render video: {exc}"
         finally:
+            self._WIDTH = previous_width
+            self._HEIGHT = previous_height
+            self._FPS = previous_fps
             for clip in all_visual_clips:
                 try:
                     clip.close()
@@ -374,6 +598,207 @@ class VideoExportService:
         )
         clips.append(clip)
         return clips
+
+    def _build_avatar_slide_clips(
+        self,
+        *,
+        slide: SlideContent | dict[str, Any],
+        topic: str,
+        index: int,
+        total: int,
+        duration: float,
+        path_prefix: Path,
+        image_module: Any,
+        draw_module: Any,
+        font_module: Any,
+        image_clip_cls: Any,
+        moviepy_vfx: Any,
+        template: _VideoTemplateStyle,
+        animation_style: str,
+        timeline_turns: list[dict[str, object]],
+        segment_lookup: dict[str, DialogueAudioSegment],
+        speaker_roster: list[dict[str, str]],
+        subtitles_enabled: bool,
+        avatar_style_pack: str,
+        render_profile: VideoRenderProfile,
+    ) -> list[Any]:
+        if not timeline_turns:
+            return self._build_slide_clips(
+                slide=slide,
+                topic=topic,
+                index=index,
+                total=total,
+                duration=duration,
+                path_prefix=path_prefix,
+                image_module=image_module,
+                draw_module=draw_module,
+                font_module=font_module,
+                image_clip_cls=image_clip_cls,
+                moviepy_vfx=moviepy_vfx,
+                template=template,
+                animation_style=animation_style,
+            )
+
+        clips: list[Any] = []
+        last_speaker = ""
+        for turn_pos, turn in enumerate(timeline_turns):
+            turn_text = " ".join(str(turn.get("text", "")).split()).strip()
+            speaker = " ".join(str(turn.get("speaker", "Speaker")).split()).strip() or "Speaker"
+            visual_ref = _as_dict(turn.get("visual_ref"))
+            reveal_index = _safe_int(visual_ref.get("item_index"), default=-1)
+            revealed_bullets = reveal_index + 1 if reveal_index >= 0 else None
+            duration_ms = max(650, _safe_int(turn.get("estimated_duration_ms"), default=0))
+            if duration_ms <= 0:
+                start_ms = _safe_int(turn.get("start_ms"), default=0)
+                end_ms = _safe_int(turn.get("end_ms"), default=start_ms + int(duration * 1000))
+                duration_ms = max(650, end_ms - start_ms)
+            turn_duration = max(0.65, float(duration_ms) / 1000.0)
+
+            image_path = path_prefix.with_name(f"{path_prefix.name}_avatar_{turn_pos+1:02d}.png")
+            self._render_slide_image(
+                slide=cast(dict[str, Any], slide if isinstance(slide, dict) else {}),
+                topic=topic,
+                index=index,
+                total=total,
+                path=image_path,
+                image_module=image_module,
+                draw_module=draw_module,
+                font_module=font_module,
+                template=template,
+                revealed_bullets=revealed_bullets,
+                code_emphasis=False,
+            )
+            image = image_module.open(image_path).convert("RGBA")
+            segment_ref = " ".join(str(turn.get("segment_ref", "")).split()).strip()
+            segment_row = segment_lookup.get(
+                segment_ref,
+                cast(
+                    DialogueAudioSegment,
+                    {
+                        "segment_ref": segment_ref,
+                        "speaker": speaker,
+                        "start_ms": _safe_int(turn.get("start_ms"), default=0),
+                        "end_ms": _safe_int(turn.get("end_ms"), default=duration_ms),
+                        "duration_ms": duration_ms,
+                        "text": turn_text,
+                        "cache_hit": False,
+                    },
+                ),
+            )
+            synthetic_segment = cast(
+                DialogueAudioSegment,
+                {
+                "segment_ref": segment_ref,
+                "speaker": speaker,
+                "start_ms": _safe_int(segment_row.get("start_ms", turn.get("start_ms")), default=0),
+                "end_ms": _safe_int(segment_row.get("end_ms", turn.get("end_ms")), default=duration_ms),
+                "duration_ms": _safe_int(segment_row.get("duration_ms"), default=duration_ms),
+                "text": turn_text,
+                "cache_hit": bool(segment_row.get("cache_hit", False)),
+                },
+            )
+            mouth_cues, lipsync_warning = self._avatar_lipsync_service.build_mouth_cues(
+                segment=synthetic_segment,
+                segment_audio_wav=None,
+            )
+            turn["mouth_cues"] = mouth_cues
+            if lipsync_warning and self._telemetry_service is not None:
+                self._telemetry_service.record_event(
+                    ObservabilityEvent(
+                        event_name="video.avatar_lipsync.segment",
+                        component="export.video_mp4",
+                        status="degraded",
+                        timestamp=_now_iso(),
+                        attributes={
+                            "slide_index": index,
+                            "segment_ref": segment_ref,
+                            "warning": lipsync_warning,
+                        },
+                    )
+                )
+            self._avatar_overlay_service.apply_overlay(
+                image=image,
+                draw_module=draw_module,
+                font_module=font_module,
+                speaker_roster=speaker_roster,
+                active_speaker=speaker,
+                last_speaker=last_speaker,
+                subtitle_text=turn_text,
+                subtitles_enabled=subtitles_enabled,
+                style_pack=avatar_style_pack,
+                render_profile=render_profile,
+            )
+            image.save(image_path)
+            last_speaker = speaker
+            clip = image_clip_cls(self._moviepy_path(image_path)).set_duration(turn_duration)
+            clip = self._apply_motion(
+                clip=clip,
+                duration=turn_duration,
+                animation_style=animation_style,
+                moviepy_vfx=moviepy_vfx,
+            )
+            clips.append(clip)
+            if self._telemetry_service is not None:
+                self._telemetry_service.record_metric(
+                    name="video_avatar_segment_duration_ms",
+                    value=float(duration_ms),
+                    attrs={"slide_index": str(index), "speaker": speaker},
+                )
+        if self._telemetry_service is not None:
+            self._telemetry_service.record_metric(
+                name="video_avatar_segments_total",
+                value=float(len(clips)),
+                attrs={"slide_index": str(index)},
+            )
+        return clips
+
+    @staticmethod
+    def _timeline_turns_by_slide(*, video_payload: VideoPayload) -> dict[int, list[dict[str, object]]]:
+        timeline = _as_dict(video_payload.get("conversation_timeline"))
+        turns = timeline.get("turns", [])
+        mapping: dict[int, list[dict[str, object]]] = {}
+        if not isinstance(turns, list):
+            return mapping
+        for turn in turns:
+            if not isinstance(turn, dict):
+                continue
+            slide_index = _safe_int(turn.get("slide_index"), default=1)
+            mapping.setdefault(slide_index, []).append(cast(dict[str, object], turn))
+        return mapping
+
+    @staticmethod
+    def _resolve_render_mode(
+        *,
+        render_mode: str | None,
+        video_payload: VideoPayload,
+    ) -> Literal["avatar_conversation", "classic_slides"]:
+        explicit = " ".join(str(render_mode or "").split()).strip().lower()
+        if explicit in {"avatar_conversation", "classic_slides"}:
+            return cast(Literal["avatar_conversation", "classic_slides"], explicit)
+        payload_mode = " ".join(str(video_payload.get("render_mode", "")).split()).strip().lower()
+        if payload_mode in {"avatar_conversation", "classic_slides"}:
+            return cast(Literal["avatar_conversation", "classic_slides"], payload_mode)
+        env_mode = " ".join(str(os.getenv("VIDEO_RENDER_MODE_DEFAULT", "avatar_conversation")).split()).strip().lower()
+        if env_mode in {"avatar_conversation", "classic_slides"}:
+            return cast(Literal["avatar_conversation", "classic_slides"], env_mode)
+        return "avatar_conversation"
+
+    @staticmethod
+    def _coerce_render_profile(raw: dict[str, object] | None) -> VideoRenderProfile:
+        profile = raw if isinstance(raw, dict) else {}
+        return cast(
+            VideoRenderProfile,
+            {
+                "profile_key": " ".join(str(profile.get("profile_key", "gpu_balanced")).split()).strip() or "gpu_balanced",
+                "width": max(640, _safe_int(profile.get("width"), default=1280)),
+                "height": max(360, _safe_int(profile.get("height"), default=720)),
+                "fps": max(15, _safe_int(profile.get("fps"), default=24)),
+                "avatar_scale": _safe_float(profile.get("avatar_scale"), default=0.92),
+                "animation_level": " ".join(str(profile.get("animation_level", "medium")).split()).strip() or "medium",
+                "gpu_available": bool(profile.get("gpu_available", False)),
+                "gpu_memory_mb": max(0, _safe_int(profile.get("gpu_memory_mb"), default=0)),
+            },
+        )
 
     @staticmethod
     def _should_use_progressive_reveal(*, slide: SlideContent | dict[str, Any], animation_style: str) -> bool:
@@ -1090,3 +1515,43 @@ def _now_iso() -> str:
     from datetime import datetime, timezone
 
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _as_dict(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): item for key, item in value.items()}
+
+
+def _safe_int(value: object, *, default: int) -> int:
+    try:
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, (int, float, str)):
+            return int(value)
+        return int(str(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value: object, *, default: float) -> float:
+    try:
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, (int, float, str)):
+            return float(value)
+        return float(str(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    normalized = " ".join(raw.split()).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default

@@ -104,6 +104,66 @@ class TestVerificationService(unittest.TestCase):
             )
         )
 
+    def test_video_media_profile_accepts_timeline_and_speaker_roster(self) -> None:
+        registry = build_default_agent_tool_registry()
+        tool = registry.get_by_intent("video")
+        assert tool is not None
+        result = AgentAssetResult(
+            intent="video",
+            status="success",
+            payload={"topic": "CDC"},
+            title="Video: CDC",
+            content={
+                "topic": "CDC",
+                "slides": [{"title": "Intro", "bullets": ["A"]}],
+                "slide_scripts": [{"slide_index": 1, "dialogue": [{"speaker": "Ava", "text": "Hello"}]}],
+                "speaker_roster": [{"name": "Ava", "role": "Guide"}, {"name": "Noah", "role": "Engineer"}],
+                "conversation_timeline": {
+                    "turns": [
+                        {
+                            "turn_index": 0,
+                            "speaker": "Ava",
+                            "text": "Hello",
+                            "slide_index": 1,
+                            "start_ms": 0,
+                            "end_ms": 1000,
+                            "visual_ref": {"slide_index": 1, "representation": "bullet"},
+                            "segment_ref": "s001_t001",
+                        }
+                    ],
+                    "audio_segments": [
+                        {"segment_ref": "s001_t001", "start_ms": 0, "end_ms": 1000},
+                    ],
+                },
+            },
+            audio_bytes=b"audio",
+            audio_error="",
+        )
+        summary = verify_asset_result(result=result, tool=tool)
+        self.assertEqual(summary.get("status"), "passed")
+
+    def test_video_media_profile_rejects_missing_timeline(self) -> None:
+        registry = build_default_agent_tool_registry()
+        tool = registry.get_by_intent("video")
+        assert tool is not None
+        result = AgentAssetResult(
+            intent="video",
+            status="success",
+            payload={"topic": "CDC"},
+            title="Video: CDC",
+            content={
+                "topic": "CDC",
+                "slides": [{"title": "Intro", "bullets": ["A"]}],
+                "slide_scripts": [{"slide_index": 1, "dialogue": [{"speaker": "Ava", "text": "Hello"}]}],
+                "speaker_roster": [{"name": "Ava", "role": "Guide"}],
+                "conversation_timeline": {"turns": []},
+            },
+            audio_bytes=b"audio",
+            audio_error="",
+        )
+        summary = verify_asset_result(result=result, tool=tool)
+        self.assertEqual(summary.get("status"), "failed")
+
 
 if __name__ == "__main__":
     unittest.main()

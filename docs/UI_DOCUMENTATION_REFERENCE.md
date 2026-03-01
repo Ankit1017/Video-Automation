@@ -43,7 +43,9 @@ This guide explains how to use the product end to end from the UI.
 
 ## Video Builder
 - Use for script + rendered video output.
-- Validate payload before full rendering/export.
+- Default mode is `avatar_conversation` (floating conversational avatars over full slide content).
+- Use advanced controls to switch `render_mode`, enable subtitles, choose style pack, and toggle auto-fallback.
+- Check `Conversation Timeline Diagnostics` before final MP4 export.
 
 ## Audio Overview
 - Use for narrated audio summary.

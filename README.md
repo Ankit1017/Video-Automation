@@ -251,6 +251,7 @@ GitHub workflow (`.github/workflows/ci.yml`) runs:
 - [Mypy Debt Tracker](docs/MYPY_DEBT_TRACKER.md)
 - [Migration Guide Folder Restructure](docs/MIGRATION_GUIDE_FOLDER_RESTRUCTURE.md)
 - [Video Asset E2E Summary](docs/VIDEO_ASSET_CREATION_E2E_SUMMARY.md)
+- [Video Avatar Mode Guide](docs/VIDEO_AVATAR_MODE_GUIDE.md)
 
 ## Notes
 

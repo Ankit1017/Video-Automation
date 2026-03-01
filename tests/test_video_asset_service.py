@@ -154,6 +154,12 @@ class TestVideoAssetService(unittest.TestCase):
         self.assertEqual(payload.get("video_template"), "standard")
         self.assertEqual(payload.get("animation_style"), "smooth")
         self.assertEqual(payload.get("representation_mode"), "auto")
+        self.assertEqual(payload.get("render_mode"), "avatar_conversation")
+        self.assertTrue(isinstance(payload.get("speaker_roster"), list))
+        self.assertGreaterEqual(len(payload.get("speaker_roster", [])), 2)
+        timeline = payload.get("conversation_timeline", {})
+        self.assertIsInstance(timeline, dict)
+        self.assertTrue(isinstance(timeline.get("turns", []), list) and len(timeline.get("turns", [])) > 0)
         metadata = payload.get("metadata", {})
         self.assertIsInstance(metadata, dict)
         self.assertEqual(metadata.get("script_language"), "english")
@@ -252,6 +258,24 @@ class TestVideoAssetService(unittest.TestCase):
         self.assertTrue(prompt_texts)
         self.assertTrue(any("Optional script language mode: Roman Hinglish." in text for text in prompt_texts))
         self.assertTrue(any("Use only Latin/Roman script" in text for text in prompt_texts))
+
+    def test_generate_supports_explicit_classic_render_mode(self) -> None:
+        result = self.service.generate(
+            topic="Segment Trees",
+            constraints="",
+            subtopic_count=2,
+            slides_per_subtopic=1,
+            code_mode="auto",
+            speaker_count=2,
+            conversation_style="Educational Discussion",
+            render_mode="classic_slides",
+            settings=self.settings,
+        )
+        self.assertIsNone(result.parse_error)
+        payload = result.video_payload or {}
+        self.assertEqual(payload.get("render_mode"), "classic_slides")
+        metadata = payload.get("metadata", {})
+        self.assertEqual(metadata.get("render_mode"), "classic_slides")
 
     def test_generate_excludes_hinglish_prompt_block_when_disabled(self) -> None:
         result = self.service.generate(

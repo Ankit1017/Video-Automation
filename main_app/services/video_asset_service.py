@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from typing import Any, Literal, cast
 
 from main_app.shared.slideshow.representation_normalizer import normalize_representation_mode
-from main_app.contracts import AudioOverviewPayload, VideoPayload
+from main_app.contracts import AudioOverviewPayload, SlideContent, VideoPayload, VideoSlideScript
 from main_app.models import GroqSettings, VideoGenerationResult
 from main_app.parsers.audio_overview_parser import AudioOverviewParser
 from main_app.services.asset_history_service import AssetHistoryService
 from main_app.services.audio_overview_service import AudioOverviewService
 from main_app.services.cached_llm_service import CachedLLMService
+from main_app.services.video_conversation_timeline_service import VideoConversationTimelineService
 from main_app.services.slideshow_service import SlideShowService
 from main_app.services.text_sanitizer import sanitize_text
 
@@ -46,12 +48,14 @@ class VideoAssetService:
         script_parser: AudioOverviewParser,
         audio_overview_service: AudioOverviewService,
         history_service: AssetHistoryService | None = None,
+        timeline_service: VideoConversationTimelineService | None = None,
     ) -> None:
         self._llm_service = llm_service
         self._slideshow_service = slideshow_service
         self._script_parser = script_parser
         self._audio_overview_service = audio_overview_service
         self._history_service = history_service
+        self._timeline_service = timeline_service or VideoConversationTimelineService()
 
     def generate(
         self,
@@ -66,6 +70,10 @@ class VideoAssetService:
         video_template: str = "standard",
         animation_style: str = "smooth",
         representation_mode: str = "auto",
+        render_mode: Literal["avatar_conversation", "classic_slides"] | None = None,
+        avatar_enable_subtitles: bool = True,
+        avatar_style_pack: str = "default",
+        avatar_allow_fallback: bool = True,
         use_youtube_prompt: bool = False,
         use_hinglish_script: bool = False,
         settings: GroqSettings,
@@ -78,6 +86,9 @@ class VideoAssetService:
         template_clean = " ".join(str(video_template).split()).strip().lower() or "standard"
         animation_style_clean = " ".join(str(animation_style).split()).strip().lower() or "smooth"
         representation_mode_clean = normalize_representation_mode(representation_mode)
+        render_mode_clean = self._normalize_render_mode(render_mode)
+        avatar_style_pack_clean = " ".join(str(avatar_style_pack).split()).strip().lower() or "default"
+        avatar_engine = " ".join(str(os.getenv("VIDEO_AVATAR_ENGINE", "local")).split()).strip().lower() or "local"
         use_hinglish_script_mode = bool(use_hinglish_script)
         parse_notes: list[str] = []
         cache_hits = 0
@@ -103,6 +114,11 @@ class VideoAssetService:
                     "video_template": template_clean,
                     "animation_style": animation_style_clean,
                     "representation_mode": representation_mode_clean,
+                    "render_mode": render_mode_clean,
+                    "avatar_enable_subtitles": bool(avatar_enable_subtitles),
+                    "avatar_style_pack": avatar_style_pack_clean,
+                    "avatar_allow_fallback": bool(avatar_allow_fallback),
+                    "avatar_engine": avatar_engine,
                     "youtube_prompt": bool(use_youtube_prompt),
                     "hinglish_script": use_hinglish_script_mode,
                 },
@@ -199,6 +215,19 @@ class VideoAssetService:
                 return result
             slide_scripts.append(normalized_script)
 
+        timeline = self._timeline_service.build_timeline(
+            slides=cast(list[SlideContent], slideshow_result.slides),
+            slide_scripts=cast(list[VideoSlideScript], slide_scripts),
+        )
+        visual_refs = []
+        timeline_turns = timeline.get("turns", []) if isinstance(timeline.get("turns"), list) else []
+        for turn in timeline_turns:
+            if not isinstance(turn, dict):
+                continue
+            visual_ref = turn.get("visual_ref")
+            if isinstance(visual_ref, dict):
+                visual_refs.append(visual_ref)
+
         video_payload = {
             "topic": topic_clean,
             "title": f"{topic_clean} Narrated Video",
@@ -209,11 +238,19 @@ class VideoAssetService:
             "video_template": template_clean,
             "animation_style": animation_style_clean,
             "representation_mode": representation_mode_clean,
+            "render_mode": render_mode_clean,
+            "conversation_timeline": timeline,
+            "visual_refs": visual_refs,
             "metadata": {
                 "total_slides": len(slideshow_result.slides),
                 "speaker_count": requested_speakers,
                 "code_mode": normalized_mode,
                 "representation_mode": representation_mode_clean,
+                "render_mode": render_mode_clean,
+                "avatar_enable_subtitles": bool(avatar_enable_subtitles),
+                "avatar_style_pack": avatar_style_pack_clean,
+                "avatar_allow_fallback": bool(avatar_allow_fallback),
+                "avatar_engine": avatar_engine,
                 "youtube_prompt": bool(use_youtube_prompt),
                 "script_language": "hinglish" if use_hinglish_script_mode else "english",
             },
@@ -228,6 +265,15 @@ class VideoAssetService:
         )
         _record_history(result)
         return result
+
+    @staticmethod
+    def _normalize_render_mode(
+        render_mode: Literal["avatar_conversation", "classic_slides"] | None,
+    ) -> Literal["avatar_conversation", "classic_slides"]:
+        raw = " ".join(str(render_mode or os.getenv("VIDEO_RENDER_MODE_DEFAULT", "avatar_conversation")).split()).strip().lower()
+        if raw == "classic_slides":
+            return "classic_slides"
+        return "avatar_conversation"
 
     def synthesize_audio(
         self,

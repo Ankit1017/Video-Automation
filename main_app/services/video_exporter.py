@@ -14,4 +14,7 @@ class VideoExporter(Protocol):
         audio_bytes: bytes,
         template_key: str | None = None,
         animation_style: str | None = None,
+        render_mode: str | None = None,
+        render_profile: dict[str, object] | None = None,
+        allow_fallback: bool | None = None,
     ) -> tuple[bytes | None, str | None]: ...

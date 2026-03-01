@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from main_app.contracts import IntentPayload
 from main_app.models import AgentAssetResult, GroqSettings
@@ -48,7 +48,15 @@ def _build_executor(context: AssetExecutorPluginContext) -> AssetExecutor:
             video_template=str(payload.get("video_template", "standard")),
             animation_style=str(payload.get("animation_style", "smooth")),
             representation_mode=str(payload.get("representation_mode", "auto")),
+            render_mode=cast(
+                Literal["avatar_conversation", "classic_slides"],
+                str(payload.get("render_mode", "avatar_conversation")),
+            ),
+            avatar_enable_subtitles=bool(payload.get("avatar_enable_subtitles", True)),
+            avatar_style_pack=str(payload.get("avatar_style_pack", "default")),
+            avatar_allow_fallback=bool(payload.get("avatar_allow_fallback", True)),
             use_youtube_prompt=bool(payload.get("youtube_prompt", False)),
+            use_hinglish_script=bool(payload.get("hinglish_script", False)),
             settings=settings,
         )
         if result.parse_error or not result.video_payload:

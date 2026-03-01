@@ -13,6 +13,8 @@ DOCUMENTATION_MODES = [UI_DOCUMENTATION_MODE, DEBUG_DOCUMENTATION_MODE]
 DOCS_WHITELIST: dict[str, str] = {
     "UI Documentation Reference": "docs/UI_DOCUMENTATION_REFERENCE.md",
     "Debug Documentation Reference": "docs/DEBUG_DOCUMENTATION_REFERENCE.md",
+    "Video Avatar Mode Guide": "docs/VIDEO_AVATAR_MODE_GUIDE.md",
+    "Video Asset Creation E2E": "docs/VIDEO_ASSET_CREATION_E2E_SUMMARY.md",
     "Observability Architecture": "docs/OBSERVABILITY_ARCHITECTURE.md",
     "Observability Debug Cookbook": "docs/OBSERVABILITY_DEBUG_COOKBOOK.md",
     "Operations Runbook": "docs/OPERATIONS_RUNBOOK.md",
@@ -138,20 +140,24 @@ def get_ui_feature_catalog() -> dict[str, dict[str, Any]]:
             "related_docs": ["docs/UI_DOCUMENTATION_REFERENCE.md", "docs/OPERATIONS_RUNBOOK.md"],
         },
         "Video Builder": {
-            "purpose": "Build video scripts/payloads and render video assets.",
-            "inputs": ["Topic", "voice/style controls", "template", "job controls"],
+            "purpose": "Build narrated videos with avatar conversation mode (default) and classic fallback.",
+            "inputs": ["Topic", "voice/style controls", "template", "avatar render controls", "job controls"],
             "outputs": ["Video payload", "audio bytes", "rendered video files"],
             "typical_workflow": [
                 "Generate video payload from topic.",
-                "Preview narration and pacing settings.",
-                "Run full render/export and validate output quality.",
+                "Preview narration and choose render mode (avatar_conversation/classic_slides).",
+                "Run full render/export and validate timeline diagnostics/fallback status.",
             ],
             "common_mistakes": [
-                "Ignoring generation warnings before rendering.",
+                "Ignoring timeline diagnostics before final export.",
                 "Expecting instant completion for long rendering jobs.",
             ],
-            "keywords": ["video", "narration", "render", "template"],
-            "related_docs": ["docs/UI_DOCUMENTATION_REFERENCE.md", "docs/VIDEO_ASSET_CREATION_E2E_SUMMARY.md"],
+            "keywords": ["video", "narration", "avatars", "render", "timeline"],
+            "related_docs": [
+                "docs/UI_DOCUMENTATION_REFERENCE.md",
+                "docs/VIDEO_ASSET_CREATION_E2E_SUMMARY.md",
+                "docs/VIDEO_AVATAR_MODE_GUIDE.md",
+            ],
         },
         "Audio Overview": {
             "purpose": "Generate podcast-style audio summaries.",

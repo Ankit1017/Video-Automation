@@ -66,10 +66,26 @@ Flow:
 
 1. Validates slides + audio input
 2. Creates temporary render workspace
-3. Renders slide PNG frames (supports multiple representation layouts)
-4. Applies motion profile (`none`, `smooth`, `youtube_dynamic`)
-5. Stitches clips + narration audio with MoviePy
-6. Returns MP4 bytes
+3. Selects adaptive render profile (`gpu_high`, `gpu_balanced`, `cpu_safe`)
+4. Builds timeline map from `conversation_timeline` and segment timing view
+5. Renders either:
+   - `avatar_conversation` (default): floating speaker avatars + subtitles + speaking focus
+   - `classic_slides` (fallback/compatibility path)
+6. Applies motion profile (`none`, `smooth`, `youtube_dynamic`)
+7. Stitches clips + narration audio with MoviePy
+8. Returns MP4 bytes
+
+### 6) Avatar Failure Strategy
+
+- If avatar pipeline fails and fallback is enabled:
+  - Emits `video.avatar_fallback` event
+  - Increments `video_avatar_fallback_total`
+  - Automatically retries render in `classic_slides` mode
+- Final payload metadata records:
+  - `render_mode_requested`
+  - `render_mode_used`
+  - `avatar_fallback_used`
+  - selected render profile details
 
 ## B) Agent Dashboard Path
 
@@ -106,6 +122,8 @@ Verification checks include:
 
 - payload presence
 - slide/script presence
+- `speaker_roster` minimum shape
+- `conversation_timeline` presence + monotonic timing checks
 - audio artifact consistency
 
 ## Storage and History

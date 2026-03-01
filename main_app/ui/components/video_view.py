@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from html import escape
 import json
 import re
-from typing import Any, Callable, cast
+from typing import Any, Callable, Sequence, cast
 
 import streamlit as st
 
@@ -81,6 +81,7 @@ def render_video_view(
     st.caption(
         f"Slides: {len(slides)} | Speakers: {len(speaker_roster)} | Narration turns: {total_turns}"
     )
+    _render_timeline_diagnostics(video_payload=video_payload)
 
     render_slideshow_view(
         topic=topic,
@@ -189,6 +190,7 @@ def render_video_view(
 
     safe_topic = re.sub(r"[^a-zA-Z0-9_-]+", "_", topic.strip())[:60].strip("_") or "video"
     script_markdown = _video_scripts_to_markdown(topic=topic, payload=video_payload)
+    timeline_json = _timeline_json(video_payload=video_payload)
     dl_col_1, dl_col_2, dl_col_3, dl_col_4 = st.columns(4)
     with dl_col_1:
         st.download_button(
@@ -242,6 +244,15 @@ def render_video_view(
                 key=config.download_video_disabled_key,
                 width="stretch",
             )
+    timeline_download_key = f"{config.download_script_json_key}_timeline"
+    st.download_button(
+        "Download Conversation Timeline JSON",
+        data=timeline_json,
+        file_name=f"{safe_topic}_conversation_timeline.json",
+        mime="application/json",
+        key=timeline_download_key,
+        width="stretch",
+    )
 
 
 def _script_for_slide_index(*, slide_scripts: list[VideoSlideScript], slide_index: int) -> dict[str, Any] | None:
@@ -304,3 +315,53 @@ def _video_scripts_to_markdown(*, topic: str, payload: VideoPayload) -> str:
             lines.append("")
 
     return "\n".join(lines)
+
+
+def _render_timeline_diagnostics(*, video_payload: VideoPayload) -> None:
+    timeline = video_payload.get("conversation_timeline", {})
+    timeline_map = timeline if isinstance(timeline, dict) else {}
+    turns = timeline_map.get("turns", [])
+    segments = timeline_map.get("audio_segments", [])
+    metadata = video_payload.get("metadata", {})
+    metadata_map = metadata if isinstance(metadata, dict) else {}
+    render_profile = video_payload.get("render_profile", {})
+    render_profile_map = render_profile if isinstance(render_profile, dict) else {}
+
+    turn_count = len(turns) if isinstance(turns, list) else 0
+    segment_count = len(segments) if isinstance(segments, list) else 0
+    speaker_names = _timeline_speakers(turns=turns if isinstance(turns, list) else [])
+    profile_key = " ".join(str(render_profile_map.get("profile_key", "n/a")).split()).strip() or "n/a"
+    mode_requested = " ".join(str(video_payload.get("render_mode", "avatar_conversation")).split()).strip() or "avatar_conversation"
+    mode_used = " ".join(str(metadata_map.get("render_mode_used", mode_requested)).split()).strip() or mode_requested
+    fallback_used = bool(metadata_map.get("avatar_fallback_used", False))
+
+    with st.expander("Conversation Timeline Diagnostics", expanded=False):
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Turns", turn_count)
+        c2.metric("Segments", segment_count)
+        c3.metric("Speakers", len(speaker_names))
+        c4.metric("Render Profile", profile_key)
+        st.caption(
+            f"Mode requested: `{mode_requested}` | Mode used: `{mode_used}` | "
+            f"Fallback used: `{fallback_used}`"
+        )
+        if speaker_names:
+            st.caption("Speaker roster from timeline: " + ", ".join(speaker_names))
+
+
+def _timeline_speakers(*, turns: Sequence[object]) -> list[str]:
+    names: list[str] = []
+    for turn in turns:
+        if not isinstance(turn, dict):
+            continue
+        speaker = " ".join(str(turn.get("speaker", "")).split()).strip()
+        if speaker and speaker not in names:
+            names.append(speaker)
+    return names
+
+
+def _timeline_json(*, video_payload: VideoPayload) -> str:
+    timeline = video_payload.get("conversation_timeline", {})
+    if not isinstance(timeline, dict):
+        timeline = {}
+    return json.dumps(timeline, ensure_ascii=False, indent=2)

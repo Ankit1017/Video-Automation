@@ -28,6 +28,10 @@ _VIDEO_DEFAULT_TEMPLATE = "youtube"
 _VIDEO_DEFAULT_USE_YOUTUBE_PROMPT = True
 _VIDEO_DEFAULT_USE_HINGLISH_SCRIPT = False
 _VIDEO_DEFAULT_SLOW_AUDIO = False
+_VIDEO_DEFAULT_RENDER_MODE: Literal["avatar_conversation", "classic_slides"] = "avatar_conversation"
+_VIDEO_DEFAULT_AVATAR_ENABLE_SUBTITLES = True
+_VIDEO_DEFAULT_AVATAR_STYLE_PACK = "default"
+_VIDEO_DEFAULT_AVATAR_ALLOW_FALLBACK = True
 
 
 def _resolve_initial_playback_language(*, selected_language: str, use_hinglish_script: bool) -> str:
@@ -124,6 +128,34 @@ def render_video_tab(
                 "youtube_dynamic": "YouTube Dynamic (Reveals + Fast Motion)",
             }[value],
         )
+        with st.expander("Advanced Avatar Settings", expanded=False):
+            st.selectbox(
+                "Render Mode",
+                options=["avatar_conversation", "classic_slides"],
+                index=0,
+                key="video_render_mode",
+                format_func=lambda value: {
+                    "avatar_conversation": "Avatar Conversation (Default)",
+                    "classic_slides": "Classic Slides",
+                }.get(value, value),
+            )
+            st.checkbox(
+                "Enable subtitles",
+                value=_VIDEO_DEFAULT_AVATAR_ENABLE_SUBTITLES,
+                key="video_avatar_enable_subtitles",
+            )
+            st.selectbox(
+                "Avatar style pack",
+                options=["default", "compact"],
+                index=0,
+                key="video_avatar_style_pack",
+                format_func=lambda value: value.title(),
+            )
+            st.checkbox(
+                "Auto fallback to classic on avatar failure",
+                value=_VIDEO_DEFAULT_AVATAR_ALLOW_FALLBACK,
+                key="video_avatar_allow_fallback",
+            )
         generate_video = st.button(
             "Generate Video Asset",
             key="video_generate_btn",
@@ -151,6 +183,10 @@ def render_video_tab(
         representation_mode = _VIDEO_DEFAULT_REPRESENTATION_MODE
         use_youtube_prompt = _VIDEO_DEFAULT_USE_YOUTUBE_PROMPT
         use_hinglish_script = _VIDEO_DEFAULT_USE_HINGLISH_SCRIPT
+        render_mode = str(st.session_state.video_render_mode or _VIDEO_DEFAULT_RENDER_MODE).strip().lower() or _VIDEO_DEFAULT_RENDER_MODE
+        avatar_enable_subtitles = bool(st.session_state.video_avatar_enable_subtitles)
+        avatar_style_pack = str(st.session_state.video_avatar_style_pack or _VIDEO_DEFAULT_AVATAR_STYLE_PACK).strip().lower() or _VIDEO_DEFAULT_AVATAR_STYLE_PACK
+        avatar_allow_fallback = bool(st.session_state.video_avatar_allow_fallback)
         code_mode = _VIDEO_DEFAULT_CODE_MODE
         speaker_count = _VIDEO_DEFAULT_SPEAKER_COUNT
         conversation_style = _VIDEO_DEFAULT_CONVERSATION_STYLE
@@ -172,6 +208,10 @@ def render_video_tab(
                 video_template=video_template,
                 animation_style=animation_style,
                 representation_mode=representation_mode,
+                render_mode=cast(Literal["avatar_conversation", "classic_slides"], render_mode),
+                avatar_enable_subtitles=avatar_enable_subtitles,
+                avatar_style_pack=avatar_style_pack,
+                avatar_allow_fallback=avatar_allow_fallback,
                 use_youtube_prompt=use_youtube_prompt,
                 use_hinglish_script=use_hinglish_script,
                 settings=settings,
@@ -201,6 +241,8 @@ def render_video_tab(
                         audio_bytes=audio_bytes,
                         template_key=video_template,
                         animation_style=animation_style,
+                        render_mode=render_mode,
+                        allow_fallback=avatar_allow_fallback,
                     )
                     video_error = render_error or ""
 
@@ -219,6 +261,10 @@ def render_video_tab(
                 "video_template": video_template,
                 "animation_style": animation_style,
                 "representation_mode": representation_mode,
+                "render_mode": render_mode,
+                "avatar_enable_subtitles": avatar_enable_subtitles,
+                "avatar_style_pack": avatar_style_pack,
+                "avatar_allow_fallback": avatar_allow_fallback,
                 "youtube_prompt": use_youtube_prompt,
                 "use_hinglish_script": use_hinglish_script,
             }
@@ -309,6 +355,12 @@ def render_video_tab(
             audio_bytes=audio_data,
             template_key=str(payload_data.get("video_template", "standard")),
             animation_style=str(payload_data.get("animation_style", "smooth")),
+            render_mode=str(payload_data.get("render_mode", "avatar_conversation")),
+            allow_fallback=bool(
+                cast(dict[str, Any], payload_data.get("metadata", {})).get("avatar_allow_fallback", True)
+                if isinstance(payload_data.get("metadata", {}), dict)
+                else True
+            ),
         ),
         initial_audio_bytes=st.session_state.video_audio_bytes,
         initial_audio_error=st.session_state.video_audio_error,
@@ -380,6 +432,10 @@ def _apply_video_job_result(
     video_template = " ".join(str(payload.get("video_template", "standard")).split()).strip().lower() or "standard"
     animation_style = " ".join(str(payload.get("animation_style", "smooth")).split()).strip().lower() or "smooth"
     representation_mode = " ".join(str(payload.get("representation_mode", "auto")).split()).strip().lower() or "auto"
+    render_mode = " ".join(str(payload.get("render_mode", "avatar_conversation")).split()).strip().lower() or "avatar_conversation"
+    avatar_enable_subtitles = bool(payload.get("avatar_enable_subtitles", True))
+    avatar_style_pack = " ".join(str(payload.get("avatar_style_pack", "default")).split()).strip().lower() or "default"
+    avatar_allow_fallback = bool(payload.get("avatar_allow_fallback", True))
     youtube_prompt = bool(payload.get("youtube_prompt", False))
     use_hinglish_script = bool(payload.get("use_hinglish_script", False))
     audio_bytes = payload.get("audio_bytes")
@@ -403,6 +459,10 @@ def _apply_video_job_result(
     st.session_state.video_last_template = video_template
     st.session_state.video_last_animation_style = animation_style
     st.session_state.video_last_representation_mode = representation_mode
+    st.session_state.video_last_render_mode = render_mode
+    st.session_state.video_last_avatar_enable_subtitles = avatar_enable_subtitles
+    st.session_state.video_last_avatar_style_pack = avatar_style_pack
+    st.session_state.video_last_avatar_allow_fallback = avatar_allow_fallback
     st.session_state.video_last_youtube_prompt = youtube_prompt
     st.session_state.video_last_use_hinglish_script = use_hinglish_script
 

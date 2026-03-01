@@ -103,6 +103,39 @@ class TestVideoExportService(unittest.TestCase):
         self.assertEqual(by_template, "youtube_dynamic")
         self.assertEqual(fallback, "smooth")
 
+    def test_resolve_render_mode_precedence_and_default(self) -> None:
+        explicit = self.service._resolve_render_mode(
+            render_mode="classic_slides",
+            video_payload={"render_mode": "avatar_conversation"},
+        )
+        from_payload = self.service._resolve_render_mode(
+            render_mode=None,
+            video_payload={"render_mode": "classic_slides"},
+        )
+        fallback = self.service._resolve_render_mode(
+            render_mode="bad-mode",
+            video_payload={},
+        )
+        self.assertEqual(explicit, "classic_slides")
+        self.assertEqual(from_payload, "classic_slides")
+        self.assertIn(fallback, {"avatar_conversation", "classic_slides"})
+
+    def test_timeline_turns_by_slide_groups_turns(self) -> None:
+        mapping = self.service._timeline_turns_by_slide(
+            video_payload={
+                "conversation_timeline": {
+                    "turns": [
+                        {"slide_index": 1, "speaker": "Ava", "text": "one"},
+                        {"slide_index": 2, "speaker": "Noah", "text": "two"},
+                        {"slide_index": 1, "speaker": "Ava", "text": "three"},
+                    ]
+                }
+            }
+        )
+        self.assertEqual(sorted(mapping.keys()), [1, 2])
+        self.assertEqual(len(mapping[1]), 2)
+        self.assertEqual(len(mapping[2]), 1)
+
     def test_reveal_steps_for_timeline_and_process_flow(self) -> None:
         timeline_steps = self.service._reveal_steps(
             slide={
