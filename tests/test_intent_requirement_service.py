@@ -94,7 +94,7 @@ class TestIntentRequirementService(unittest.TestCase):
         self.assertEqual(updated["language"], "en")
         self.assertFalse(updated["slow_audio"])
         self.assertEqual(updated["video_template"], "standard")
-        self.assertEqual(updated["animation_style"], "smooth")
+        self.assertEqual(updated["animation_style"], "none")
         self.assertFalse(updated["youtube_prompt"])
 
     def test_apply_default_optionals_for_slideshow(self) -> None:

@@ -46,7 +46,7 @@ def _build_executor(context: AssetExecutorPluginContext) -> AssetExecutor:
             speaker_count=int(payload.get("speaker_count", 2)),
             conversation_style=str(payload.get("conversation_style", "Educational Discussion")),
             video_template=str(payload.get("video_template", "standard")),
-            animation_style=str(payload.get("animation_style", "smooth")),
+            animation_style=str(payload.get("animation_style", "none")),
             representation_mode=str(payload.get("representation_mode", "auto")),
             render_mode=cast(
                 Literal["avatar_conversation", "classic_slides"],

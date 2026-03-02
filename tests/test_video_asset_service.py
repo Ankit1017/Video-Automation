@@ -152,7 +152,7 @@ class TestVideoAssetService(unittest.TestCase):
         self.assertEqual(len(payload.get("slides", [])), 2)
         self.assertEqual(len(payload.get("slide_scripts", [])), 2)
         self.assertEqual(payload.get("video_template"), "standard")
-        self.assertEqual(payload.get("animation_style"), "smooth")
+        self.assertEqual(payload.get("animation_style"), "none")
         self.assertEqual(payload.get("representation_mode"), "auto")
         self.assertEqual(payload.get("render_mode"), "avatar_conversation")
         self.assertTrue(isinstance(payload.get("speaker_roster"), list))

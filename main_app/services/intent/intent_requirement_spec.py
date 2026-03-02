@@ -276,7 +276,7 @@ REQUIREMENT_SPEC: RequirementSpecMap = {
             "animation_style": {
                 "label": "Animation Style",
                 "type": "enum",
-                "default": "smooth",
+                "default": "none",
                 "options": ["none", "smooth", "youtube_dynamic"],
             },
             "representation_mode": {

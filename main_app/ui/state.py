@@ -68,7 +68,7 @@ SESSION_DEFAULTS = {
     "video_language": "en",
     "video_slow_audio": False,
     "video_template": "standard",
-    "video_animation_style": "smooth",
+    "video_animation_style": "none",
     "video_render_mode": "avatar_conversation",
     "video_avatar_enable_subtitles": True,
     "video_avatar_style_pack": "default",

@@ -99,9 +99,9 @@ class TestVideoExportService(unittest.TestCase):
             selected_template_key="standard",
         )
         self.assertEqual(explicit, "none")
-        self.assertEqual(from_payload, "youtube_dynamic")
-        self.assertEqual(by_template, "youtube_dynamic")
-        self.assertEqual(fallback, "smooth")
+        self.assertEqual(from_payload, "none")
+        self.assertEqual(by_template, "none")
+        self.assertEqual(fallback, "none")
 
     def test_resolve_render_mode_precedence_and_default(self) -> None:
         explicit = self.service._resolve_render_mode(

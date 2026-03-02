@@ -52,6 +52,8 @@ class TestBackgroundJobManager(unittest.TestCase):
         self.assertEqual(snapshot.status, "completed")
         self.assertEqual(snapshot.result, {"status": "ok"})
         self.assertGreaterEqual(snapshot.progress, 1.0)
+        self.assertIsNotNone(snapshot.elapsed_seconds)
+        self.assertEqual(snapshot.eta_seconds_remaining, 0.0)
 
     def test_cancel_queued_job(self) -> None:
         manager = BackgroundJobManager(max_workers=1)
@@ -110,6 +112,88 @@ class TestBackgroundJobManager(unittest.TestCase):
 
         gate.set()
         _wait_for_terminal(manager, first_job)
+        _wait_for_terminal(manager, queued_job)
+
+    def test_running_job_exposes_tentative_eta(self) -> None:
+        manager = BackgroundJobManager(max_workers=1)
+        self.addCleanup(manager.shutdown, wait=True)
+        stage_entered = Event()
+        release = Event()
+
+        def _worker(context: BackgroundJobContext) -> str:
+            context.update_progress(progress=0.25, message="Generating payload")
+            stage_entered.set()
+            for _ in range(250):
+                if release.is_set():
+                    break
+                time.sleep(0.02)
+            context.update_progress(progress=1.0, message="Done")
+            return "ok"
+
+        job_id = manager.submit(label="ETA Running", worker=_worker, metadata={"asset": "video"})
+        stage_entered.wait(timeout=1.0)
+        time.sleep(0.08)
+        snapshot = manager.get_snapshot(job_id)
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertEqual(snapshot.status, "running")
+        self.assertEqual(snapshot.stage_name, "Generating payload")
+        self.assertIsNotNone(snapshot.elapsed_seconds)
+        self.assertIsNotNone(snapshot.eta_seconds_remaining)
+        self.assertTrue(bool(snapshot.estimated_finish_at))
+        release.set()
+        _wait_for_terminal(manager, job_id)
+
+    def test_queued_job_eta_uses_historical_asset_average(self) -> None:
+        manager = BackgroundJobManager(max_workers=1)
+        self.addCleanup(manager.shutdown, wait=True)
+        release_first = Event()
+        first_started = Event()
+
+        def _first_worker(context: BackgroundJobContext) -> str:
+            context.update_progress(progress=0.2, message="Stage A")
+            first_started.set()
+            for _ in range(250):
+                if release_first.is_set():
+                    break
+                time.sleep(0.02)
+            context.update_progress(progress=1.0, message="Done")
+            return "done"
+
+        first_job = manager.submit(label="First", worker=_first_worker, metadata={"asset": "video"})
+        first_started.wait(timeout=1.0)
+        release_first.set()
+        _wait_for_terminal(manager, first_job)
+
+        block_gate = Event()
+        blocker_started = Event()
+
+        def _blocking_worker(context: BackgroundJobContext) -> str:
+            context.update_progress(progress=0.15, message="Blocking stage")
+            blocker_started.set()
+            for _ in range(250):
+                if block_gate.is_set():
+                    break
+                time.sleep(0.02)
+            context.update_progress(progress=1.0, message="Done")
+            return "done"
+
+        def _queued_worker(_context: BackgroundJobContext) -> str:
+            return "queued-done"
+
+        blocking_job = manager.submit(label="Blocking", worker=_blocking_worker, metadata={"asset": "video"})
+        blocker_started.wait(timeout=1.0)
+        queued_job = manager.submit(label="Queued ETA", worker=_queued_worker, metadata={"asset": "video"})
+        queued_snapshot = manager.get_snapshot(queued_job)
+        self.assertIsNotNone(queued_snapshot)
+        assert queued_snapshot is not None
+        self.assertEqual(queued_snapshot.status, "queued")
+        self.assertEqual(queued_snapshot.queue_position, 1)
+        self.assertIsNotNone(queued_snapshot.historical_avg_duration_seconds)
+        self.assertIsNotNone(queued_snapshot.eta_seconds_remaining)
+        self.assertTrue(bool(queued_snapshot.estimated_finish_at))
+        block_gate.set()
+        _wait_for_terminal(manager, blocking_job)
         _wait_for_terminal(manager, queued_job)
 
     def test_cancel_running_job(self) -> None:

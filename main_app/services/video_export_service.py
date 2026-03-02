@@ -1369,15 +1369,9 @@ class VideoExportService:
         video_payload: VideoPayload,
         selected_template_key: str,
     ) -> str:
-        requested = " ".join(str(animation_style or "").split()).strip().lower()
-        if requested in cls._ANIMATION_STYLES:
-            return requested
-        payload_style = " ".join(str(video_payload.get("animation_style", "")).split()).strip().lower()
-        if payload_style in cls._ANIMATION_STYLES:
-            return payload_style
-        if selected_template_key == "youtube":
-            return "youtube_dynamic"
-        return "smooth"
+        del animation_style, video_payload, selected_template_key
+        # Static-first policy: keep slide visuals stable (no zoom/crossfade motion).
+        return "none"
 
     @staticmethod
     def _font_candidates(*, bold: bool, mono: bool) -> list[str]:

@@ -28,6 +28,7 @@ _VIDEO_DEFAULT_TEMPLATE = "youtube"
 _VIDEO_DEFAULT_USE_YOUTUBE_PROMPT = True
 _VIDEO_DEFAULT_USE_HINGLISH_SCRIPT = False
 _VIDEO_DEFAULT_SLOW_AUDIO = False
+_VIDEO_DEFAULT_ANIMATION_STYLE = "none"
 _VIDEO_DEFAULT_RENDER_MODE: Literal["avatar_conversation", "classic_slides"] = "avatar_conversation"
 _VIDEO_DEFAULT_AVATAR_ENABLE_SUBTITLES = True
 _VIDEO_DEFAULT_AVATAR_STYLE_PACK = "default"
@@ -120,7 +121,7 @@ def render_video_tab(
         st.selectbox(
             "Animation Style",
             options=["youtube_dynamic", "smooth", "none"],
-            index=0,
+            index=2,
             key="video_animation_style",
             format_func=lambda value: {
                 "none": "None (Static Slides)",
@@ -179,7 +180,7 @@ def render_video_tab(
         selected_playback_language = str(st.session_state.video_language)
         playback_slow = _VIDEO_DEFAULT_SLOW_AUDIO
         video_template = _VIDEO_DEFAULT_TEMPLATE
-        animation_style = str(st.session_state.video_animation_style or "youtube_dynamic").strip().lower() or "youtube_dynamic"
+        animation_style = str(st.session_state.video_animation_style or _VIDEO_DEFAULT_ANIMATION_STYLE).strip().lower() or _VIDEO_DEFAULT_ANIMATION_STYLE
         representation_mode = _VIDEO_DEFAULT_REPRESENTATION_MODE
         use_youtube_prompt = _VIDEO_DEFAULT_USE_YOUTUBE_PROMPT
         use_hinglish_script = _VIDEO_DEFAULT_USE_HINGLISH_SCRIPT

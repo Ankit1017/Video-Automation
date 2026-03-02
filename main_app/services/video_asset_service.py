@@ -68,7 +68,7 @@ class VideoAssetService:
         speaker_count: int = 2,
         conversation_style: str = "Educational Discussion",
         video_template: str = "standard",
-        animation_style: str = "smooth",
+        animation_style: str = "none",
         representation_mode: str = "auto",
         render_mode: Literal["avatar_conversation", "classic_slides"] | None = None,
         avatar_enable_subtitles: bool = True,
