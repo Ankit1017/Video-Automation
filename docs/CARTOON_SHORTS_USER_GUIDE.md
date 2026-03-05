@@ -16,6 +16,8 @@
    - `Output Mode`
    - `Timeline Schema Version` (`v2` recommended, `v1` legacy)
    - `Quality Tier` (`auto | light | balanced | high`)
+   - `Render Style` (`scene | character_showcase`)
+   - `Background Style` (`auto | scene | chroma_green`)
    - `Language`
    - `Cinematic Story Mode` (recommended)
 4. Choose timeline source:
@@ -102,4 +104,7 @@ Required state coverage:
 - Use 2-4 speakers max for clean layout.
 - Keep `Cinematic Story Mode` on for richer camera motion and scene transitions.
 - Use `Quality Tier = auto` for hardware-aware defaults.
+- For single-character greenscreen output, use:
+  - `Render Style = character_showcase`
+  - `Background Style = chroma_green` (or `auto` with showcase)
 - If manual JSON is rejected, validate `scenes[]` and `turns[]` first.

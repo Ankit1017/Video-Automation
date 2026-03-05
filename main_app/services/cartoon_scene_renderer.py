@@ -29,6 +29,8 @@ class CartoonSceneRenderer:
         frame_plan: dict[str, object] | None = None,
         lottie_cache_service: Any | None = None,
         timeline_schema_version: str = "v1",
+        render_style: str = "scene",
+        background_style: str = "scene",
     ) -> Any:
         safe_frame_count = max(1, int(frame_count))
         safe_frame_index = max(0, min(int(frame_index), safe_frame_count - 1))
@@ -36,7 +38,16 @@ class CartoonSceneRenderer:
         if not cinematic_mode:
             progress = 0.0
 
-        image = image_module.new("RGB", (width, height), color=self._background_color(scene.get("background_key")))
+        style = _resolve_render_style(render_style)
+        showcase_mode = style == "character_showcase"
+        bg_mode = _resolve_background_style(background_style, render_style=style)
+        chroma_mode = bg_mode == "chroma_green"
+
+        image = image_module.new(
+            "RGB",
+            (width, height),
+            color=((0, 255, 0) if chroma_mode else self._background_color(scene.get("background_key"))),
+        )
         drawer = draw_module.Draw(image)
 
         use_v2_plan = _clean(timeline_schema_version).lower() == "v2" and isinstance(frame_plan, dict)
@@ -52,25 +63,27 @@ class CartoonSceneRenderer:
                 progress=progress,
             )
 
-        self._draw_background_layers(
-            drawer=drawer,
-            width=width,
-            height=height,
-            scene=scene,
-            progress=progress,
-            camera_shift_x=camera_shift_x,
-            camera_shift_y=camera_shift_y,
-            camera_zoom=camera_zoom,
-        )
-        self._draw_header(
-            drawer=drawer,
-            font_module=font_module,
-            width=width,
-            topic=topic,
-            scene_title=_clean(scene.get("title")) or "Scene",
-            mood=_clean(scene.get("mood")) or "neutral",
-            frame_bob=_sin_like(progress, period=0.5),
-        )
+        if not chroma_mode:
+            self._draw_background_layers(
+                drawer=drawer,
+                width=width,
+                height=height,
+                scene=scene,
+                progress=progress,
+                camera_shift_x=camera_shift_x,
+                camera_shift_y=camera_shift_y,
+                camera_zoom=camera_zoom,
+            )
+        if not showcase_mode and not chroma_mode:
+            self._draw_header(
+                drawer=drawer,
+                font_module=font_module,
+                width=width,
+                topic=topic,
+                scene_title=_clean(scene.get("title")) or "Scene",
+                mood=_clean(scene.get("mood")) or "neutral",
+                frame_bob=_sin_like(progress, period=0.5),
+            )
         if use_v2_plan:
             self._draw_characters_from_plan(
                 image=image,
@@ -85,40 +98,61 @@ class CartoonSceneRenderer:
                 camera_shift_x=camera_shift_x,
                 camera_shift_y=camera_shift_y,
                 camera_zoom=camera_zoom,
+                render_style=style,
             )
         else:
-            self._draw_characters(
+            if showcase_mode:
+                self._draw_characters(
+                    drawer=drawer,
+                    width=width,
+                    height=height,
+                    font_module=font_module,
+                    character_roster=character_roster,
+                    active_speaker_id=_clean((active_turn or {}).get("speaker_id")),
+                    active_mouth=active_mouth,
+                    shot_type="close_single",
+                    focus_character_id=_clean(scene.get("focus_character_id")),
+                    frame_index=safe_frame_index,
+                    progress=progress,
+                    camera_shift_x=0.0,
+                    camera_shift_y=0.0,
+                    camera_zoom=max(1.0, camera_zoom),
+                )
+            else:
+                self._draw_characters(
+                    drawer=drawer,
+                    width=width,
+                    height=height,
+                    font_module=font_module,
+                    character_roster=character_roster,
+                    active_speaker_id=_clean((active_turn or {}).get("speaker_id")),
+                    active_mouth=active_mouth,
+                    shot_type=_clean(scene.get("shot_type")) or "medium_two_shot",
+                    focus_character_id=_clean(scene.get("focus_character_id")),
+                    frame_index=safe_frame_index,
+                    progress=progress,
+                    camera_shift_x=camera_shift_x,
+                    camera_shift_y=camera_shift_y,
+                    camera_zoom=camera_zoom,
+                )
+        if not showcase_mode:
+            self._draw_subtitle(
                 drawer=drawer,
                 width=width,
                 height=height,
                 font_module=font_module,
+                active_turn=active_turn,
                 character_roster=character_roster,
-                active_speaker_id=_clean((active_turn or {}).get("speaker_id")),
-                active_mouth=active_mouth,
-                shot_type=_clean(scene.get("shot_type")) or "medium_two_shot",
-                focus_character_id=_clean(scene.get("focus_character_id")),
-                frame_index=safe_frame_index,
                 progress=progress,
-                camera_shift_x=camera_shift_x,
-                camera_shift_y=camera_shift_y,
-                camera_zoom=camera_zoom,
             )
-        self._draw_subtitle(
-            drawer=drawer,
-            width=width,
-            height=height,
-            font_module=font_module,
-            active_turn=active_turn,
-            character_roster=character_roster,
-            progress=progress,
-        )
 
-        image = self._apply_grade(
-            image_module=image_module,
-            image=image,
-            mood=_clean(scene.get("mood")) or "neutral",
-        )
-        if cinematic_mode:
+        if not chroma_mode:
+            image = self._apply_grade(
+                image_module=image_module,
+                image=image,
+                mood=_clean(scene.get("mood")) or "neutral",
+            )
+        if cinematic_mode and not showcase_mode and not chroma_mode:
             image = self._apply_transition_overlay(
                 image_module=image_module,
                 image=image,
@@ -378,6 +412,7 @@ class CartoonSceneRenderer:
         camera_shift_x: float,
         camera_shift_y: float,
         camera_zoom: float,
+        render_style: str,
     ) -> None:
         planned_raw = frame_plan.get("characters", [])
         planned = [item for item in planned_raw if isinstance(item, dict)] if isinstance(planned_raw, list) else []
@@ -399,6 +434,9 @@ class CartoonSceneRenderer:
                 camera_zoom=camera_zoom,
             )
             return
+        showcase_mode = _resolve_render_style(render_style) == "character_showcase"
+        if showcase_mode:
+            planned = [_showcase_subject(planned)]
         roster_by_id = {
             _clean(item.get("id")).lower(): item
             for item in character_roster
@@ -413,6 +451,10 @@ class CartoonSceneRenderer:
             x_norm = _float_safe(planned_character.get("x_norm"), default=0.5)
             y_norm = _float_safe(planned_character.get("y_norm"), default=0.72)
             scale = max(0.2, _float_safe(planned_character.get("scale"), default=1.0) * max(0.2, camera_zoom))
+            if showcase_mode:
+                x_norm = 0.5
+                y_norm = 0.92
+                scale = max(0.9, scale * 1.48)
             state = _clean(planned_character.get("state")).lower() or "idle"
             emotion = _clean(planned_character.get("emotion")).lower() or "neutral"
             viseme = _clean(planned_character.get("viseme")).upper() or "X"
@@ -422,8 +464,12 @@ class CartoonSceneRenderer:
             anchor_x = _float_safe(anchor_map.get("x"), default=0.5)
             anchor_y = _float_safe(anchor_map.get("y"), default=1.0)
 
-            center_x = int((width * x_norm) + (camera_shift_x * 0.95))
-            center_y = int((height * y_norm) + (camera_shift_y * 0.95))
+            if showcase_mode:
+                center_x = int(width * x_norm)
+                center_y = int(height * y_norm)
+            else:
+                center_x = int((width * x_norm) + (camera_shift_x * 0.95))
+                center_y = int((height * y_norm) + (camera_shift_y * 0.95))
             sprite_drawn = False
 
             if (
@@ -441,7 +487,7 @@ class CartoonSceneRenderer:
                         fps=max(12, _int_safe(frame_plan.get("fps"), default=24)),
                     )
                     sprite = image_module.open(frame_path).convert("RGBA")
-                    target_h = max(48, int(height * 0.3 * scale))
+                    target_h = max(48, int(height * (0.62 if showcase_mode else 0.3) * scale))
                     ratio = max(0.1, float(sprite.size[0]) / float(max(sprite.size[1], 1)))
                     target_w = max(36, int(target_h * ratio))
                     sprite = sprite.resize((target_w, target_h))
@@ -449,16 +495,17 @@ class CartoonSceneRenderer:
                     top = int(center_y - (target_h * anchor_y))
                     image.paste(sprite, (left, top), sprite)
                     sprite_drawn = True
-                    if is_active:
+                    if is_active and not showcase_mode:
                         drawer.rounded_rectangle(
                             (left - 6, top - 6, left + target_w + 6, top + target_h + 6),
                             radius=12,
                             outline=(236, 244, 255),
                             width=3,
                         )
-                    bbox = drawer.textbbox((0, 0), name, font=name_font)
-                    text_w = max(0, bbox[2] - bbox[0])
-                    drawer.text((center_x - text_w // 2, top + target_h + 8), name, fill=(242, 246, 255), font=name_font)
+                    if not showcase_mode:
+                        bbox = drawer.textbbox((0, 0), name, font=name_font)
+                        text_w = max(0, bbox[2] - bbox[0])
+                        drawer.text((center_x - text_w // 2, top + target_h + 8), name, fill=(242, 246, 255), font=name_font)
                 except (AttributeError, OSError, RuntimeError, TypeError, ValueError, FileNotFoundError):
                     sprite_drawn = False
 
@@ -466,10 +513,10 @@ class CartoonSceneRenderer:
                 continue
 
             rgb = _hex_to_rgb(_clean(character.get("color_hex"))) or (95, 140, 210)
-            rr = max(26, int(min(width, height) * 0.08 * scale))
+            rr = max(26, int(min(width, height) * (0.08 if not showcase_mode else 0.16) * scale))
             lift = int(rr * (0.12 if is_active else 0.04))
-            outline = (245, 247, 255) if is_active else (186, 198, 218)
-            outline_width = 6 if is_active else 3
+            outline = (245, 247, 255) if is_active and not showcase_mode else (186, 198, 218)
+            outline_width = 6 if is_active and not showcase_mode else 3
             drawer.ellipse(
                 (center_x - rr, center_y - rr - lift, center_x + rr, center_y + rr - lift),
                 fill=rgb,
@@ -513,9 +560,10 @@ class CartoonSceneRenderer:
                     fill=(20, 26, 38),
                     width=3,
                 )
-            bbox = drawer.textbbox((0, 0), name, font=name_font)
-            text_w = max(0, bbox[2] - bbox[0])
-            drawer.text((center_x - text_w // 2, center_y + rr + 12 - lift), name, fill=(242, 246, 255), font=name_font)
+            if not showcase_mode:
+                bbox = drawer.textbbox((0, 0), name, font=name_font)
+                text_w = max(0, bbox[2] - bbox[0])
+                drawer.text((center_x - text_w // 2, center_y + rr + 12 - lift), name, fill=(242, 246, 255), font=name_font)
 
     def _draw_subtitle(
         self,
@@ -658,6 +706,28 @@ def _find_character_index(roster: list[CartoonCharacterSpec], character_id: str)
         if _clean(item.get("id")).lower() == target:
             return idx
     return -1
+
+
+def _resolve_render_style(value: object) -> str:
+    if _clean(value).lower() == "character_showcase":
+        return "character_showcase"
+    return "scene"
+
+
+def _resolve_background_style(background_style: object, *, render_style: str) -> str:
+    raw = _clean(background_style).lower()
+    if raw == "auto":
+        return "chroma_green" if _resolve_render_style(render_style) == "character_showcase" else "scene"
+    if raw in {"scene", "chroma_green"}:
+        return raw
+    return "scene"
+
+
+def _showcase_subject(planned: list[dict[str, object]]) -> dict[str, object]:
+    for item in planned:
+        if bool(item.get("is_active", False)):
+            return item
+    return planned[0] if planned else {}
 
 
 def _clean(value: object) -> str:

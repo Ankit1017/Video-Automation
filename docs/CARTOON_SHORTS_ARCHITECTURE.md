@@ -41,6 +41,8 @@ v2 additions:
 
 - `timeline_schema_version` (`v1 | v2`)
 - `quality_tier` (`auto | light | balanced | high`)
+- `render_style` (`scene | character_showcase`)
+- `background_style` (`auto | scene | chroma_green`)
 - `camera_track`, `character_tracks`, `subtitle_track` on scenes
 - extended `CartoonCharacterSpec` fields for cache-based rendering
 

@@ -79,3 +79,12 @@ Checks:
 1. Inspect `cartoon.sprite.cache_miss_total`.
 2. Verify `talk` variants include visemes `A..H,X`.
 3. Confirm render `quality_tier` and selected fps match expected cache cadence.
+
+## 7) Output style does not match single-character showcase target
+
+Checks:
+
+1. Set `render_style=character_showcase` in payload/UI.
+2. Set `background_style=chroma_green` (or keep `auto` while showcase style is selected).
+3. Verify payload metadata contains both keys on export-start path.
+4. Confirm character cache variants contain multiple frames; single-frame variants will look static.

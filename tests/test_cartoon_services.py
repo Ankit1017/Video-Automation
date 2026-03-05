@@ -111,6 +111,8 @@ class TestCartoonServices(unittest.TestCase):
         payload = result.cartoon_payload or {}
         self.assertEqual(payload.get("short_type"), "educational_explainer")
         self.assertEqual(payload.get("output_mode"), "dual")
+        self.assertEqual(payload.get("render_style"), "scene")
+        self.assertEqual(payload.get("background_style"), "auto")
         self.assertTrue(isinstance(payload.get("timeline", {}), dict))
         self.assertTrue(str(payload.get("script_markdown", "")).strip())
 
@@ -136,4 +138,3 @@ class TestCartoonServices(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -3,10 +3,12 @@ from __future__ import annotations
 from typing import cast
 
 from main_app.contracts import (
+    CartoonBackgroundStyle,
     CartoonCharacterSpec,
     CartoonOutputMode,
     CartoonPayload,
     CartoonQualityTier,
+    CartoonRenderStyle,
     CartoonShortType,
     CartoonTimelineSchemaVersion,
     CartoonTimeline,
@@ -47,6 +49,8 @@ class CartoonShortsAssetService:
         manual_timeline: CartoonTimeline | None = None,
         timeline_schema_version: str = "v1",
         quality_tier: str = "auto",
+        render_style: str = "scene",
+        background_style: str = "auto",
         settings: GroqSettings,
     ) -> CartoonShortsGenerationResult:
         topic_clean = _clean(topic)
@@ -55,6 +59,8 @@ class CartoonShortsAssetService:
         output_mode_clean = _normalize_output_mode(output_mode)
         timeline_schema_version_clean = _normalize_timeline_schema_version(timeline_schema_version)
         quality_tier_clean = _normalize_quality_tier(quality_tier)
+        render_style_clean = _normalize_render_style(render_style)
+        background_style_clean = _normalize_background_style(background_style)
         notes: list[str] = []
 
         character_roster = self._character_pack_service.load_roster(speaker_count=speaker_count)
@@ -135,6 +141,8 @@ class CartoonShortsAssetService:
                 "script_markdown": script_markdown,
                 "timeline_schema_version": timeline_schema_version_clean,
                 "quality_tier": quality_tier_clean,
+                "render_style": render_style_clean,
+                "background_style": background_style_clean,
                 "metadata": {
                     "idea": idea_clean,
                     "scene_count_requested": max(2, min(int(scene_count), 10)),
@@ -142,6 +150,8 @@ class CartoonShortsAssetService:
                     "pack": self._character_pack_service.pack_metadata(),
                     "timeline_schema_version": timeline_schema_version_clean,
                     "quality_tier": quality_tier_clean,
+                    "render_style": render_style_clean,
+                    "background_style": background_style_clean,
                 },
             },
         )
@@ -165,6 +175,8 @@ class CartoonShortsAssetService:
             use_hinglish_script=use_hinglish_script,
             timeline_schema_version=timeline_schema_version_clean,
             quality_tier=quality_tier_clean,
+            render_style=render_style_clean,
+            background_style=background_style_clean,
             result=result,
             model=settings.normalized_model,
         )
@@ -183,6 +195,8 @@ class CartoonShortsAssetService:
         use_hinglish_script: bool,
         timeline_schema_version: CartoonTimelineSchemaVersion,
         quality_tier: CartoonQualityTier,
+        render_style: CartoonRenderStyle,
+        background_style: CartoonBackgroundStyle,
         result: CartoonShortsGenerationResult,
         model: str,
     ) -> None:
@@ -205,6 +219,8 @@ class CartoonShortsAssetService:
                 "hinglish_script": bool(use_hinglish_script),
                 "timeline_schema_version": timeline_schema_version,
                 "quality_tier": quality_tier,
+                "render_style": render_style,
+                "background_style": background_style,
             },
             result_payload=payload,
             status="error" if result.parse_error else "success",
@@ -281,6 +297,20 @@ def _normalize_quality_tier(value: str) -> CartoonQualityTier:
     if raw in {"auto", "light", "balanced", "high"}:
         return cast(CartoonQualityTier, raw)
     return cast(CartoonQualityTier, "auto")
+
+
+def _normalize_render_style(value: str) -> CartoonRenderStyle:
+    raw = _clean(value).lower()
+    if raw in {"scene", "character_showcase"}:
+        return cast(CartoonRenderStyle, raw)
+    return cast(CartoonRenderStyle, "scene")
+
+
+def _normalize_background_style(value: str) -> CartoonBackgroundStyle:
+    raw = _clean(value).lower()
+    if raw in {"auto", "scene", "chroma_green"}:
+        return cast(CartoonBackgroundStyle, raw)
+    return cast(CartoonBackgroundStyle, "auto")
 
 
 def _int_safe(value: object, *, default: int) -> int:

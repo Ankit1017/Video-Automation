@@ -10,12 +10,14 @@ from time import perf_counter
 from typing import Any, cast
 
 from main_app.contracts import (
+    CartoonBackgroundStyle,
     CartoonCharacterSpec,
     CartoonDialogueTurn,
     CartoonOutputArtifact,
     CartoonPayload,
     CartoonQualityTier,
     CartoonRenderProfile,
+    CartoonRenderStyle,
     CartoonScene,
 )
 from main_app.services.cartoon_character_asset_validator import CartoonCharacterAssetValidator
@@ -67,6 +69,8 @@ class CartoonExportService:
         selected_mode = _resolve_output_mode(output_mode=output_mode, payload=cartoon_payload)
         timeline_schema_version = _resolve_timeline_schema_version(payload=cartoon_payload)
         quality_tier = _resolve_quality_tier(payload=cartoon_payload, profile=profile)
+        render_style = _resolve_render_style(payload=cartoon_payload)
+        background_style = _resolve_background_style(payload=cartoon_payload, render_style=render_style)
         cinematic_mode = _bool_from_metadata(payload=cartoon_payload, key="cinematic_story_mode", default=True)
         targets = self._build_targets(profile=profile, output_mode=selected_mode, quality_tier=quality_tier)
         render_root: Path | None = None
@@ -90,6 +94,8 @@ class CartoonExportService:
                             "cinematic_mode": cinematic_mode,
                             "timeline_schema_version": timeline_schema_version,
                             "quality_tier": quality_tier,
+                            "render_style": render_style,
+                            "background_style": background_style,
                         },
                     )
                 )
@@ -189,6 +195,8 @@ class CartoonExportService:
                                 "height": target.height,
                                 "fps": target.fps,
                                 "quality_tier": quality_tier,
+                                "render_style": render_style,
+                                "background_style": background_style,
                             },
                         )
                     )
@@ -275,6 +283,8 @@ class CartoonExportService:
                                 frame_plan=frame_plan,
                                 lottie_cache_service=lottie_cache_service,
                                 timeline_schema_version=timeline_schema_version,
+                                render_style=render_style,
+                                background_style=background_style,
                             )
                             frame.save(frame_path)
                             clip_paths.append(frame_path)
@@ -395,6 +405,12 @@ class CartoonExportService:
             cartoon_payload["render_profile"] = profile
             cartoon_payload["quality_tier"] = quality_tier
             cartoon_payload["timeline_schema_version"] = cast(Any, timeline_schema_version)
+            cartoon_payload["render_style"] = render_style
+            cartoon_payload["background_style"] = background_style
+            metadata = cartoon_payload.get("metadata", {})
+            if isinstance(metadata, dict):
+                metadata["render_style"] = render_style
+                metadata["background_style"] = background_style
             duration_ms = max((perf_counter() - started_at) * 1000.0, 0.0)
             if self._telemetry_service is not None:
                 with self._telemetry_service.context_scope(request_id=request_id):
@@ -419,6 +435,8 @@ class CartoonExportService:
                                 "profile_key": str(profile.get("profile_key", "unknown")),
                                 "cinematic_mode": cinematic_mode,
                                 "quality_tier": quality_tier,
+                                "render_style": render_style,
+                                "background_style": background_style,
                             },
                         )
                     )
@@ -519,6 +537,28 @@ def _resolve_quality_tier(*, payload: CartoonPayload, profile: CartoonRenderProf
     if raw in {"light", "balanced", "high"}:
         return cast(CartoonQualityTier, raw)
     return cast(CartoonQualityTier, "balanced")
+
+
+def _resolve_render_style(*, payload: CartoonPayload) -> CartoonRenderStyle:
+    metadata = payload.get("metadata", {})
+    metadata_map = metadata if isinstance(metadata, dict) else {}
+    raw = _clean(payload.get("render_style") or metadata_map.get("render_style") or "scene").lower()
+    if raw == "character_showcase":
+        return cast(CartoonRenderStyle, "character_showcase")
+    return cast(CartoonRenderStyle, "scene")
+
+
+def _resolve_background_style(*, payload: CartoonPayload, render_style: CartoonRenderStyle) -> CartoonBackgroundStyle:
+    metadata = payload.get("metadata", {})
+    metadata_map = metadata if isinstance(metadata, dict) else {}
+    raw = _clean(payload.get("background_style") or metadata_map.get("background_style") or "auto").lower()
+    if raw == "auto":
+        if render_style == "character_showcase":
+            return cast(CartoonBackgroundStyle, "chroma_green")
+        return cast(CartoonBackgroundStyle, "scene")
+    if raw in {"scene", "chroma_green"}:
+        return cast(CartoonBackgroundStyle, raw)
+    return cast(CartoonBackgroundStyle, "scene")
 
 
 def _tier_adjusted_fps(base_fps: int, *, quality_tier: CartoonQualityTier) -> int:

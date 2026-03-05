@@ -29,6 +29,8 @@ _OUTPUT_MODES = ["dual", "shorts_9_16", "widescreen_16_9"]
 _LANGUAGES = ["en", "hi"]
 _TIMELINE_SCHEMA_OPTIONS = ["v2", "v1"]
 _QUALITY_TIERS = ["auto", "light", "balanced", "high"]
+_RENDER_STYLES = ["scene", "character_showcase"]
+_BACKGROUND_STYLES = ["auto", "scene", "chroma_green"]
 
 
 def render_cartoon_shorts_tab(
@@ -79,6 +81,8 @@ def render_cartoon_shorts_tab(
         st.selectbox("Output Mode", options=_OUTPUT_MODES, index=0, key="cartoon_output_mode")
         st.selectbox("Timeline Schema Version", options=_TIMELINE_SCHEMA_OPTIONS, index=0, key="cartoon_timeline_schema_version")
         st.selectbox("Quality Tier", options=_QUALITY_TIERS, index=0, key="cartoon_quality_tier")
+        st.selectbox("Render Style", options=_RENDER_STYLES, index=0, key="cartoon_render_style")
+        st.selectbox("Background Style", options=_BACKGROUND_STYLES, index=0, key="cartoon_background_style")
         st.selectbox("Language", options=_LANGUAGES, index=0, key="cartoon_language")
         st.checkbox("Use Hinglish Script", value=False, key="cartoon_hinglish_script")
         st.checkbox("Cinematic Story Mode", value=True, key="cartoon_cinematic_story_mode")
@@ -103,6 +107,8 @@ def render_cartoon_shorts_tab(
         output_mode = str(st.session_state.get("cartoon_output_mode", "dual")).strip().lower()
         timeline_schema_version = str(st.session_state.get("cartoon_timeline_schema_version", "v2")).strip().lower()
         quality_tier = str(st.session_state.get("cartoon_quality_tier", "auto")).strip().lower()
+        render_style = str(st.session_state.get("cartoon_render_style", "scene")).strip().lower()
+        background_style = str(st.session_state.get("cartoon_background_style", "auto")).strip().lower()
         language = str(st.session_state.get("cartoon_language", "en")).strip().lower()
         hinglish_script = bool(st.session_state.get("cartoon_hinglish_script", False))
         cinematic_story_mode = bool(st.session_state.get("cartoon_cinematic_story_mode", True))
@@ -128,6 +134,8 @@ def render_cartoon_shorts_tab(
                 manual_timeline=manual_timeline,
                 timeline_schema_version=timeline_schema_version,
                 quality_tier=quality_tier,
+                render_style=render_style,
+                background_style=background_style,
                 settings=settings,
             )
             context.raise_if_cancelled()
@@ -163,6 +171,8 @@ def render_cartoon_shorts_tab(
                 metadata_map["audio_segments"] = _segments_json(segments, lipsync_service=lipsync_service)
                 metadata_map["audio_timing_source"] = "timeline_audio_segments"
                 metadata_map["mouth_cue_source"] = "heuristic_or_rhubarb"
+                metadata_map["render_style"] = render_style
+                metadata_map["background_style"] = background_style
                 payload["metadata"] = metadata_map
                 context.raise_if_cancelled()
 
@@ -204,6 +214,8 @@ def render_cartoon_shorts_tab(
                 "output_mode": output_mode,
                 "timeline_schema_version": timeline_schema_version,
                 "quality_tier": quality_tier,
+                "render_style": render_style,
+                "background_style": background_style,
                 "hinglish_script": hinglish_script,
                 "cinematic_story_mode": cinematic_story_mode,
                 "timeline_mode": timeline_mode,
@@ -219,6 +231,8 @@ def render_cartoon_shorts_tab(
                 "output_mode": output_mode,
                 "timeline_schema_version": timeline_schema_version,
                 "quality_tier": quality_tier,
+                "render_style": render_style,
+                "background_style": background_style,
             },
         )
         st.session_state.cartoon_background_job_id = job_id

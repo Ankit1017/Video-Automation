@@ -73,6 +73,17 @@ CartoonQualityTier: TypeAlias = Literal[
     "high",
 ]
 
+CartoonRenderStyle: TypeAlias = Literal[
+    "scene",
+    "character_showcase",
+]
+
+CartoonBackgroundStyle: TypeAlias = Literal[
+    "auto",
+    "scene",
+    "chroma_green",
+]
+
 CartoonEaseType: TypeAlias = Literal[
     "linear",
     "ease_in",
@@ -312,6 +323,8 @@ class CartoonPayload(TypedDict, total=False):
     metadata: dict[str, JSONValue]
     timeline_schema_version: CartoonTimelineSchemaVersion
     quality_tier: CartoonQualityTier
+    render_style: CartoonRenderStyle
+    background_style: CartoonBackgroundStyle
 
 
 class AssetSection(TypedDict, total=False):
@@ -588,6 +601,16 @@ class IntentPayload(TypedDict, total=False):
     youtube_prompt: bool
     animation_style: str
     representation_mode: str
+    short_type: str
+    scene_count: int
+    output_mode: str
+    hinglish_script: bool
+    timeline_schema_version: str
+    quality_tier: str
+    render_style: str
+    background_style: str
+    idea: str
+    manual_timeline_json: str
 
 
 IntentPayloadMap: TypeAlias = dict[str, IntentPayload]

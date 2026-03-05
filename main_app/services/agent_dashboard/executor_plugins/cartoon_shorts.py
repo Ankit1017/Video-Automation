@@ -44,6 +44,8 @@ def _build_executor(context: AssetExecutorPluginContext) -> AssetExecutor:
             manual_timeline=manual_timeline,
             timeline_schema_version=str(payload.get("timeline_schema_version", "v1")),
             quality_tier=str(payload.get("quality_tier", "auto")),
+            render_style=str(payload.get("render_style", "scene")),
+            background_style=str(payload.get("background_style", "auto")),
             settings=settings,
         )
         if result.parse_error or not isinstance(result.cartoon_payload, dict):
