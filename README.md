@@ -14,6 +14,7 @@ This project produces multiple asset types from one input topic:
 - Quiz
 - Slideshow
 - Video payload + rendered media
+- Cartoon shorts payload + dual-format renders
 - Audio overview
 - Agent-driven multi-tool workflow outputs
 - In-app Documentation Center (UI + Debug modes)
@@ -252,6 +253,9 @@ GitHub workflow (`.github/workflows/ci.yml`) runs:
 - [Migration Guide Folder Restructure](docs/MIGRATION_GUIDE_FOLDER_RESTRUCTURE.md)
 - [Video Asset E2E Summary](docs/VIDEO_ASSET_CREATION_E2E_SUMMARY.md)
 - [Video Avatar Mode Guide](docs/VIDEO_AVATAR_MODE_GUIDE.md)
+- [Cartoon Shorts User Guide](docs/CARTOON_SHORTS_USER_GUIDE.md)
+- [Cartoon Shorts Architecture](docs/CARTOON_SHORTS_ARCHITECTURE.md)
+- [Cartoon Shorts Debug Runbook](docs/CARTOON_SHORTS_DEBUG_RUNBOOK.md)
 
 ## Notes
 

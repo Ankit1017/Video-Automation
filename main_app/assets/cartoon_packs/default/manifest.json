@@ -1,0 +1,53 @@
+{
+  "pack_name": "Hatched Default Toon Pack",
+  "pack_version": "v1",
+  "license": "Commercial-friendly internal asset pack",
+  "characters": [
+    {
+      "id": "ava",
+      "name": "Ava",
+      "role": "Guide",
+      "color_hex": "#4F8EF7",
+      "outfit_variant": "hoodie_blue",
+      "voice": "female_1"
+    },
+    {
+      "id": "noah",
+      "name": "Noah",
+      "role": "Engineer",
+      "color_hex": "#5BC0A8",
+      "outfit_variant": "shirt_green",
+      "voice": "male_1"
+    },
+    {
+      "id": "mia",
+      "name": "Mia",
+      "role": "Reviewer",
+      "color_hex": "#F39C6B",
+      "outfit_variant": "jacket_orange",
+      "voice": "female_2"
+    },
+    {
+      "id": "liam",
+      "name": "Liam",
+      "role": "Examples Specialist",
+      "color_hex": "#BA8CFF",
+      "outfit_variant": "shirt_purple",
+      "voice": "male_2"
+    }
+  ],
+  "background_keys": [
+    "studio_blue",
+    "classroom_warm",
+    "city_evening",
+    "news_desk",
+    "product_stage",
+    "case_boardroom"
+  ],
+  "emotion_keys": [
+    "neutral",
+    "excited",
+    "curious",
+    "serious"
+  ]
+}

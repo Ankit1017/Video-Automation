@@ -255,10 +255,13 @@ class BackgroundJobManager:
         normalized = " ".join(str(job_id).split()).strip()
         if not normalized:
             return None
+        request_id = ""
+        asset_key = "generic"
         with self._lock:
             state = self._jobs.get(normalized)
             if state is None:
                 return None
+            request_id = state.request_id
             queued_before = [
                 item
                 for item in self._jobs.values()
@@ -291,7 +294,8 @@ class BackgroundJobManager:
                 stage_name=state.current_stage,
                 stage_elapsed_seconds=stage_elapsed_seconds,
             )
-            return BackgroundJobSnapshot(
+            asset_key = self._asset_key(metadata=state.metadata)
+            snapshot = BackgroundJobSnapshot(
                 id=state.id,
                 label=state.label,
                 status=state.status,
@@ -314,6 +318,21 @@ class BackgroundJobManager:
                 stage_eta_seconds_remaining=stage_eta_seconds_remaining,
                 historical_avg_duration_seconds=historical_avg_duration_seconds,
             )
+        if (
+            self._telemetry_service is not None
+            and asset_key == "cartoon_shorts"
+            and snapshot.eta_seconds_remaining is not None
+        ):
+            with self._telemetry_service.context_scope(request_id=request_id, job_id=snapshot.id):
+                self._telemetry_service.record_metric(
+                    name="cartoon_background_eta_seconds",
+                    value=float(snapshot.eta_seconds_remaining),
+                    attrs={
+                        "stage_name": snapshot.stage_name,
+                        "status": snapshot.status,
+                    },
+                )
+        return snapshot
 
     def is_cancel_requested(self, job_id: str) -> bool:
         normalized = " ".join(str(job_id).split()).strip()

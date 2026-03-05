@@ -2,6 +2,7 @@
 
 from main_app.ui.components.flashcards_view import FlashcardsRenderConfig, render_flashcards_view
 from main_app.ui.components.background_job_view import render_background_job_panel
+from main_app.ui.components.cartoon_view import CartoonRenderConfig, render_cartoon_view
 from main_app.ui.components.quiz_view import QuizRenderConfig, render_quiz_view
 from main_app.ui.components.report_view import ReportRenderConfig, render_report_view
 from main_app.ui.components.slideshow_view import SlideshowRenderConfig, render_slideshow_view
@@ -17,8 +18,10 @@ __all__ = [
     "ReportRenderConfig",
     "SlideshowRenderConfig",
     "SourceGroundingSelection",
+    "CartoonRenderConfig",
     "VideoRenderConfig",
     "render_background_job_panel",
+    "render_cartoon_view",
     "render_flashcards_view",
     "render_quiz_view",
     "render_report_view",

@@ -9,6 +9,8 @@ from main_app.infrastructure.agent_dashboard_session_store import AgentDashboard
 from main_app.models import GroqSettings, WebSourcingSettings
 from main_app.services.agent_dashboard import AgentDashboardService
 from main_app.services.cached_llm_service import CachedLLMService
+from main_app.services.cartoon_exporter import CartoonExporter
+from main_app.services.cartoon_shorts_asset_service import CartoonShortsAssetService
 from main_app.services.global_grounding_service import GlobalGroundingService
 from main_app.services.intent import IntentRouterService
 from main_app.services.quiz_exporter import QuizExporter
@@ -40,6 +42,8 @@ def render_agent_dashboard_tab(
     slide_exporter: SlideDeckExporter,
     video_service: VideoAssetService,
     video_exporter: VideoExporter,
+    cartoon_service: CartoonShortsAssetService,
+    cartoon_exporter: CartoonExporter,
     source_grounding_service: SourceGroundingService,
     global_grounding_service: GlobalGroundingService,
     asset_render_handlers: dict[str, AgentAssetRenderHandler] | None = None,
@@ -67,6 +71,8 @@ def render_agent_dashboard_tab(
             slide_exporter=slide_exporter,
             video_service=video_service,
             video_exporter=video_exporter,
+            cartoon_service=cartoon_service,
+            cartoon_exporter=cartoon_exporter,
         ),
         render_handlers=asset_render_handlers,
     )

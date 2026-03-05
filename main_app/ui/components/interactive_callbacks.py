@@ -3,11 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from main_app.contracts import VideoPayload
+from main_app.contracts import CartoonPayload, VideoPayload
 from main_app.models import GroqSettings
 from main_app.ui.components.flashcards_view import FlashcardExplainFn
 from main_app.ui.components.quiz_view import QuizExplainFn, QuizFeedbackFn, QuizHintFn
 from main_app.ui.components.video_view import VideoBuildFn, VideoSynthesizeFn
+from main_app.ui.components.cartoon_view import CartoonBuildFn
 
 
 class _FlashcardExplainer(Protocol):
@@ -82,6 +83,17 @@ class _VideoBuilder(Protocol):
         render_mode: str | None = None,
         allow_fallback: bool | None = None,
     ) -> tuple[bytes | None, str | None]:
+        ...
+
+
+class _CartoonBuilder(Protocol):
+    def build_cartoon_mp4s(
+        self,
+        *,
+        topic: str,
+        cartoon_payload: CartoonPayload,
+        output_mode: str | None = None,
+    ) -> tuple[dict[str, bytes], str | None]:
         ...
 
 
@@ -192,6 +204,17 @@ def build_video_build_callback(service: _VideoBuilder) -> VideoBuildFn:
             animation_style=str(video_payload.get("animation_style", "smooth")),
             render_mode=str(video_payload.get("render_mode", "avatar_conversation")),
             allow_fallback=bool(metadata_map.get("avatar_allow_fallback", True)),
+        )
+
+    return _callback
+
+
+def build_cartoon_build_callback(service: _CartoonBuilder) -> CartoonBuildFn:
+    def _callback(topic: str, cartoon_payload: CartoonPayload) -> tuple[dict[str, bytes], str | None]:
+        return service.build_cartoon_mp4s(
+            topic=topic,
+            cartoon_payload=cartoon_payload,
+            output_mode=str(cartoon_payload.get("output_mode", "dual")),
         )
 
     return _callback

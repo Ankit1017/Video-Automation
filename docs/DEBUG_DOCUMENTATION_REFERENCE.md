@@ -45,6 +45,11 @@ This guide explains backend execution flow and how to triage failures quickly.
   - render profile selector: `video_render_profile_service.py`
   - lipsync cues: `video_avatar_lipsync_service.py`
   - avatar overlays: `video_avatar_overlay_service.py`
+- Cartoon shorts internals:
+  - storyboard generation: `cartoon_storyboard_service.py`
+  - timeline normalization: `cartoon_timeline_service.py`
+  - scene renderer: `cartoon_scene_renderer.py`
+  - dual-format exporter: `cartoon_export_service.py`
 
 ## G. Observability signal path
 - In-app telemetry: `main_app/services/telemetry_service.py`
@@ -77,6 +82,12 @@ This guide explains backend execution flow and how to triage failures quickly.
 1. Inspect exporter-specific error details.
 2. Validate source artifact schema and payload completeness.
 3. Correlate with prior stage/job failure events.
+
+## Cartoon shorts failures
+1. Validate `character_roster` has at least 2 entries.
+2. Validate `timeline.scenes[].turns[]` has speaker/text fields.
+3. Check `cartoon.render.format.end` events for failing format key.
+4. Retry with single output mode (`shorts_9_16` or `widescreen_16_9`) to isolate rendering issues.
 
 ## Avatar-mode degradation/fallback
 1. Filter events for `video.avatar_fallback` and `video.avatar_lipsync.segment`.

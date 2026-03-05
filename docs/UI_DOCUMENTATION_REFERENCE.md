@@ -47,6 +47,12 @@ This guide explains how to use the product end to end from the UI.
 - Use advanced controls to switch `render_mode`, enable subtitles, choose style pack, and toggle auto-fallback.
 - Check `Conversation Timeline Diagnostics` before final MP4 export.
 
+## Cartoon Shorts Studio
+- Use for animated multi-character shorts.
+- Choose `Idea to Script` mode for automatic scene creation or `Manual Timeline JSON` for explicit control.
+- Supports `dual` output rendering (`9:16` and `16:9`) and downloadable project/script artifacts.
+- Track stage progress in the background job panel (`Script Generation`, `Voice Synthesis`, render stages).
+
 ## Audio Overview
 - Use for narrated audio summary.
 - Select narration settings (including Hinglish option when available).
@@ -86,7 +92,7 @@ This guide explains how to use the product end to end from the UI.
 - Detailed Description -> Mind Map Builder -> Flashcards -> Quiz
 
 ## Delivery flow
-- Create Report -> Slide Show -> Video Builder / Audio Overview
+- Create Report -> Slide Show -> Video Builder / Cartoon Shorts Studio / Audio Overview
 
 ## Reliability flow
 - Web Sourcing Check -> Generation tab -> Observability -> Asset History

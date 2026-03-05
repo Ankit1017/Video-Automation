@@ -17,6 +17,12 @@ from main_app.services.agent_dashboard.run_ledger_service import RunLedgerServic
 from main_app.services.agent_dashboard.stage_ledger_service import StageLedgerService
 from main_app.services.asset_history_service import AssetHistoryService
 from main_app.services.audio_overview_service import AudioOverviewService
+from main_app.services.cartoon_audio_service import CartoonAudioService
+from main_app.services.cartoon_character_pack_service import CartoonCharacterPackService
+from main_app.services.cartoon_export_service import CartoonExportService
+from main_app.services.cartoon_shorts_asset_service import CartoonShortsAssetService
+from main_app.services.cartoon_storyboard_service import CartoonStoryboardService
+from main_app.services.cartoon_timeline_service import CartoonTimelineService
 from main_app.services.cached_llm_service import CachedLLMService
 from main_app.services.data_table_service import DataTableService
 from main_app.services.flashcards_service import FlashcardsService
@@ -46,6 +52,9 @@ class AppContainer:
     slideshow_service: SlideShowService
     audio_overview_service: AudioOverviewService
     video_service: VideoAssetService
+    cartoon_shorts_service: CartoonShortsAssetService
+    cartoon_audio_service: CartoonAudioService
+    cartoon_export_service: CartoonExportService
     intent_router_service: IntentRouterService
     agent_dashboard_service: AgentDashboardService
     quiz_export_service: QuizExportService
@@ -74,6 +83,12 @@ class AppServiceFactories:
     audio_overview_parser_cls: type[AudioOverviewParser] = AudioOverviewParser
     audio_overview_service_cls: type[AudioOverviewService] = AudioOverviewService
     video_asset_service_cls: type[VideoAssetService] = VideoAssetService
+    cartoon_storyboard_service_cls: type[CartoonStoryboardService] = CartoonStoryboardService
+    cartoon_timeline_service_cls: type[CartoonTimelineService] = CartoonTimelineService
+    cartoon_character_pack_service_cls: type[CartoonCharacterPackService] = CartoonCharacterPackService
+    cartoon_shorts_asset_service_cls: type[CartoonShortsAssetService] = CartoonShortsAssetService
+    cartoon_audio_service_cls: type[CartoonAudioService] = CartoonAudioService
+    cartoon_export_service_cls: type[CartoonExportService] = CartoonExportService
     source_grounding_service_cls: type[SourceGroundingService] = SourceGroundingService
     global_grounding_service_cls: type[GlobalGroundingService] = GlobalGroundingService
     intent_parser_cls: type[IntentParser] = IntentParser
@@ -138,6 +153,17 @@ def build_app_container(
         audio_overview_service,
         history_service=asset_history_service,
     )
+    cartoon_storyboard_service = service_factories.cartoon_storyboard_service_cls(llm_service)
+    cartoon_timeline_service = service_factories.cartoon_timeline_service_cls()
+    cartoon_character_pack_service = service_factories.cartoon_character_pack_service_cls()
+    cartoon_shorts_service = service_factories.cartoon_shorts_asset_service_cls(
+        storyboard_service=cartoon_storyboard_service,
+        timeline_service=cartoon_timeline_service,
+        character_pack_service=cartoon_character_pack_service,
+        history_service=asset_history_service,
+    )
+    cartoon_audio_service = service_factories.cartoon_audio_service_cls(audio_overview_service)
+    cartoon_export_service = service_factories.cartoon_export_service_cls(telemetry_service=telemetry_service)
     source_grounding_service = service_factories.source_grounding_service_cls()
     global_grounding_service = service_factories.global_grounding_service_cls(
         source_grounding_service=source_grounding_service,
@@ -157,6 +183,8 @@ def build_app_container(
         quiz_service=quiz_service,
         slideshow_service=slideshow_service,
         video_service=video_service,
+        cartoon_service=cartoon_shorts_service,
+        cartoon_export_service=cartoon_export_service,
         audio_overview_service=audio_overview_service,
         report_service=report_service,
     )
@@ -179,6 +207,8 @@ def build_app_container(
         quiz_service=quiz_service,
         slideshow_service=slideshow_service,
         video_service=video_service,
+        cartoon_service=cartoon_shorts_service,
+        cartoon_export_service=cartoon_export_service,
         audio_overview_service=audio_overview_service,
         report_service=report_service,
         asset_service=agent_asset_service,
@@ -193,6 +223,9 @@ def build_app_container(
         slideshow_service=slideshow_service,
         audio_overview_service=audio_overview_service,
         video_service=video_service,
+        cartoon_shorts_service=cartoon_shorts_service,
+        cartoon_audio_service=cartoon_audio_service,
+        cartoon_export_service=cartoon_export_service,
         intent_router_service=intent_router_service,
         agent_dashboard_service=agent_dashboard_service,
         quiz_export_service=service_factories.quiz_export_service_cls(telemetry_service=telemetry_service),

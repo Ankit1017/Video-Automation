@@ -30,6 +30,7 @@ _GROUP_CONFIG: dict[str, dict[str, tuple[str, ...]]] = {
     "Observability": {"prefixes": ("observability_",)},
     "Documentation": {"prefixes": ("documentation_",)},
     "Video": {"prefixes": ("video_",)},
+    "Cartoon Shorts": {"prefixes": ("cartoon_",)},
     "Slideshow": {"prefixes": ("slideshow_",)},
     "Quiz": {"prefixes": ("quiz_",)},
     "Report": {"prefixes": ("report_",)},

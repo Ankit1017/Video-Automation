@@ -6,6 +6,8 @@ from typing import Callable
 from main_app.contracts import IntentPayload
 from main_app.models import AgentAssetResult, GroqSettings
 from main_app.services.audio_overview_service import AudioOverviewService
+from main_app.services.cartoon_export_service import CartoonExportService
+from main_app.services.cartoon_shorts_asset_service import CartoonShortsAssetService
 from main_app.services.data_table_service import DataTableService
 from main_app.services.flashcards_service import FlashcardsService
 from main_app.services.mind_map_service import MindMapService
@@ -44,6 +46,8 @@ class AssetExecutorPluginContext:
     quiz_service: QuizService
     slideshow_service: SlideShowService
     video_service: VideoAssetService | None
+    cartoon_service: CartoonShortsAssetService | None
+    cartoon_export_service: CartoonExportService | None
     audio_overview_service: AudioOverviewService
     report_service: ReportService
 

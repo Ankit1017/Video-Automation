@@ -11,6 +11,9 @@ from main_app.services.asset_history_service import AssetHistoryService
 from main_app.services.audio_overview_service import AudioOverviewService
 from main_app.services.background_jobs import BackgroundJobManager
 from main_app.services.cached_llm_service import CachedLLMService
+from main_app.services.cartoon_audio_service import CartoonAudioService
+from main_app.services.cartoon_exporter import CartoonExporter
+from main_app.services.cartoon_shorts_asset_service import CartoonShortsAssetService
 from main_app.services.data_table_service import DataTableService
 from main_app.services.flashcards_service import FlashcardsService
 from main_app.services.intent import IntentRouterService
@@ -45,6 +48,7 @@ from main_app.ui.tabs.slideshow_tab import render_slideshow_tab
 from main_app.ui.tabs.video_tab import render_video_tab
 from main_app.ui.tabs.web_sourcing_tab import render_web_sourcing_tab
 from main_app.ui.tabs.cache_center_tab import render_cache_center_tab
+from main_app.ui.tabs.cartoon_shorts_tab import render_cartoon_shorts_tab
 
 
 @dataclass(frozen=True)
@@ -63,6 +67,8 @@ def build_main_tab_registrations(
     quiz_service: QuizService,
     slideshow_service: SlideShowService,
     video_service: VideoAssetService,
+    cartoon_shorts_service: CartoonShortsAssetService,
+    cartoon_audio_service: CartoonAudioService,
     audio_overview_service: AudioOverviewService,
     intent_router_service: IntentRouterService,
     agent_dashboard_service: AgentDashboardService,
@@ -78,6 +84,7 @@ def build_main_tab_registrations(
     report_exporter: ReportExporter,
     slide_exporter: SlideDeckExporter,
     video_exporter: VideoExporter,
+    cartoon_exporter: CartoonExporter,
     job_manager: BackgroundJobManager,
     source_grounding_service: SourceGroundingService,
     global_grounding_service: GlobalGroundingService,
@@ -175,6 +182,18 @@ def build_main_tab_registrations(
             ),
         ),
         TabRegistration(
+            title="Cartoon Shorts Studio",
+            render=lambda: render_cartoon_shorts_tab(
+                cartoon_service=cartoon_shorts_service,
+                cartoon_audio_service=cartoon_audio_service,
+                cartoon_exporter=cartoon_exporter,
+                llm_service=llm_service,
+                settings=settings,
+                cache_count_placeholder=cache_count_placeholder,
+                job_manager=job_manager,
+            ),
+        ),
+        TabRegistration(
             title="Audio Overview",
             render=lambda: render_audio_overview_tab(
                 audio_overview_service=audio_overview_service,
@@ -238,6 +257,8 @@ def build_main_tab_registrations(
                 slide_exporter=slide_exporter,
                 video_service=video_service,
                 video_exporter=video_exporter,
+                cartoon_service=cartoon_shorts_service,
+                cartoon_exporter=cartoon_exporter,
                 source_grounding_service=source_grounding_service,
                 global_grounding_service=global_grounding_service,
             ),
@@ -256,6 +277,8 @@ def build_main_tab_registrations(
                 report_exporter=report_exporter,
                 slide_exporter=slide_exporter,
                 video_exporter=video_exporter,
+                cartoon_service=cartoon_shorts_service,
+                cartoon_exporter=cartoon_exporter,
             ),
         ),
     ]

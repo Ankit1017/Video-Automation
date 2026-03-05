@@ -1,0 +1,7 @@
+{
+  "id": "cartoon_shorts.v1",
+  "intent": "cartoon_shorts",
+  "version": "v1",
+  "required_section_key": "artifact.cartoon_shorts.payload",
+  "required_data_type": "object"
+}

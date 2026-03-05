@@ -8,6 +8,8 @@ from main_app.models import AgentAssetResult
 from main_app.services.agent_dashboard.artifact_adapter import (
     ARTIFACT_AUDIO_OVERVIEW_AUDIO,
     ARTIFACT_AUDIO_OVERVIEW_PAYLOAD,
+    ARTIFACT_CARTOON_OUTPUTS,
+    ARTIFACT_CARTOON_PAYLOAD,
     ARTIFACT_FLASHCARDS_CARDS,
     ARTIFACT_MINDMAP_TREE,
     ARTIFACT_QUIZ_DATA,
@@ -252,6 +254,73 @@ def _verify_media_asset(*, result: AgentAssetResult, tool: AgentToolDefinition) 
         if audio_data is None and result.audio_bytes is None and not result.audio_error:
             issues.append(_issue("Video audio output is missing.", f"sections.{ARTIFACT_VIDEO_AUDIO}"))
 
+    if intent == "cartoon_shorts":
+        payload = _section_data(result=result, key=ARTIFACT_CARTOON_PAYLOAD)
+        checks_run.append("cartoon_payload_present")
+        if payload is None:
+            issues.append(_issue("Cartoon shorts payload section is missing.", f"sections.{ARTIFACT_CARTOON_PAYLOAD}"))
+        else:
+            checks_run.append("cartoon_timeline_present")
+            timeline = payload.get("timeline", {}) if isinstance(payload, dict) else {}
+            if not isinstance(timeline, dict):
+                issues.append(_issue("Cartoon timeline must be an object.", f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.timeline"))
+            else:
+                scenes = timeline.get("scenes", [])
+                if not isinstance(scenes, list) or not scenes:
+                    issues.append(
+                        _issue(
+                            "Cartoon timeline.scenes must be non-empty.",
+                            f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.timeline.scenes",
+                        )
+                    )
+                else:
+                    previous_scene_index = 0
+                    for idx, scene in enumerate(scenes):
+                        if not isinstance(scene, dict):
+                            issues.append(_issue("Each scene must be an object.", f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.timeline.scenes[{idx}]"))
+                            continue
+                        scene_index = _safe_int(scene.get("scene_index"), default=-1)
+                        if scene_index <= 0:
+                            issues.append(
+                                _issue(
+                                    "Scene scene_index must be > 0.",
+                                    f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.timeline.scenes[{idx}].scene_index",
+                                )
+                            )
+                        if previous_scene_index > 0 and scene_index < previous_scene_index:
+                            issues.append(
+                                _issue(
+                                    "Scene indices must be monotonic.",
+                                    f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.timeline.scenes[{idx}].scene_index",
+                                )
+                            )
+                        previous_scene_index = max(previous_scene_index, scene_index)
+                        turns = scene.get("turns", [])
+                        if not isinstance(turns, list) or not turns:
+                            issues.append(
+                                _issue(
+                                    "Each scene must include turns.",
+                                    f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.timeline.scenes[{idx}].turns",
+                                )
+                            )
+                        else:
+                            _validate_video_timeline_turns(
+                                turns=turns,
+                                issues=issues,
+                                path_prefix=f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.timeline.scenes[{idx}].turns",
+                            )
+            checks_run.append("cartoon_roster_present")
+            character_roster = payload.get("character_roster", []) if isinstance(payload, dict) else []
+            if not isinstance(character_roster, list) or len(character_roster) < 2:
+                issues.append(
+                    _issue(
+                        "Cartoon character_roster must include at least 2 characters.",
+                        f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.character_roster",
+                    )
+                )
+        checks_run.append("cartoon_outputs_artifact_optional")
+        _ = _section_data(result=result, key=ARTIFACT_CARTOON_OUTPUTS)
+
     if intent == "audio_overview":
         payload = _section_data(result=result, key=ARTIFACT_AUDIO_OVERVIEW_PAYLOAD)
         checks_run.append("audio_overview_payload_present")
@@ -369,7 +438,7 @@ def _verify_profile(tool: AgentToolDefinition) -> tuple[str, VerificationIssue |
     intent = _normalize(tool.intent)
     if intent in {"topic", "report"}:
         inferred = VERIFY_PROFILE_TEXT
-    elif intent in {"video", "audio_overview"}:
+    elif intent in {"video", "cartoon_shorts", "audio_overview"}:
         inferred = VERIFY_PROFILE_MEDIA
     else:
         inferred = VERIFY_PROFILE_STRUCTURED
@@ -405,6 +474,7 @@ def _primary_key_for_intent(intent: str) -> str:
         "quiz": ARTIFACT_QUIZ_DATA,
         "slideshow": ARTIFACT_SLIDESHOW_SLIDES,
         "video": ARTIFACT_VIDEO_PAYLOAD,
+        "cartoon_shorts": ARTIFACT_CARTOON_PAYLOAD,
         "audio_overview": ARTIFACT_AUDIO_OVERVIEW_PAYLOAD,
         "report": ARTIFACT_REPORT_TEXT,
     }

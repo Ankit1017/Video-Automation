@@ -6,7 +6,7 @@ APP_TITLE = "Knowledge App"
 APP_DESCRIPTION = (
     "Use separate tabs for detailed explanations, hierarchical mind maps, interactive flashcards, "
     "report generation, data table building, quiz practice, slide creation, narrated video generation, "
-    "audio overviews, web sourcing checks, documentation center guidance, chat intent detection, "
+    "cartoon shorts studio generation, audio overviews, web sourcing checks, documentation center guidance, chat intent detection, "
     "agent dashboard chat orchestration, and asset history."
 )
 
@@ -44,6 +44,7 @@ TAB_TITLES = [
     "Quiz",
     "Slide Show",
     "Video Builder",
+    "Cartoon Shorts Studio",
     "Audio Overview",
     "Web Sourcing Check",
     "Cache Center",

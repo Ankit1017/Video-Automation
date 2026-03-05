@@ -10,6 +10,8 @@ from main_app.services.cached_llm_service import CachedLLMService
 from main_app.services.quiz_exporter import QuizExporter
 from main_app.services.report_exporter import ReportExporter
 from main_app.services.slide_deck_exporter import SlideDeckExporter
+from main_app.services.cartoon_exporter import CartoonExporter
+from main_app.services.cartoon_shorts_asset_service import CartoonShortsAssetService
 from main_app.services.video_asset_service import VideoAssetService
 from main_app.services.video_exporter import VideoExporter
 
@@ -28,4 +30,6 @@ class AssetHistoryRenderContext:
     slide_exporter: SlideDeckExporter
     video_service: VideoAssetService
     video_exporter: VideoExporter
+    cartoon_service: CartoonShortsAssetService
+    cartoon_exporter: CartoonExporter
     custom_renderers: dict[str, RendererFn] | None = None

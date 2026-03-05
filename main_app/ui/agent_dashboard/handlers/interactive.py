@@ -4,9 +4,11 @@ from typing import Any, cast
 
 from main_app.contracts import IntentPayload
 from main_app.contracts import VideoPayload
+from main_app.contracts import CartoonPayload
 from main_app.ui.agent_dashboard.context import AgentAssetRenderContext
 from main_app.ui.agent_dashboard.handlers.types import AgentAsset
 from main_app.ui.components.interactive_callbacks import (
+    build_cartoon_build_callback,
     build_flashcard_explain_callback,
     build_quiz_callbacks,
     build_video_build_callback,
@@ -14,11 +16,13 @@ from main_app.ui.components.interactive_callbacks import (
     first_non_empty_topic,
 )
 from main_app.ui.components import (
+    CartoonRenderConfig,
     FlashcardsRenderConfig,
     QuizRenderConfig,
     SlideshowRenderConfig,
     VideoRenderConfig,
     render_flashcards_view,
+    render_cartoon_view,
     render_quiz_view,
     render_slideshow_view,
     render_video_view,
@@ -35,6 +39,12 @@ def _as_video_payload(value: object) -> VideoPayload:
     if not isinstance(value, dict):
         return {}
     return cast(VideoPayload, value)
+
+
+def _as_cartoon_payload(value: object) -> CartoonPayload:
+    if not isinstance(value, dict):
+        return {}
+    return cast(CartoonPayload, value)
 
 
 def render_flashcards_asset(
@@ -199,4 +209,30 @@ def render_video_asset(
             else None
         ),
         initial_audio_error=str(asset.get("audio_error", "")).strip(),
+    )
+
+
+def render_cartoon_asset(
+    context: AgentAssetRenderContext,
+    scope: str,
+    payload: IntentPayload,
+    content: object,
+    asset: AgentAsset,
+) -> None:
+    _ = asset
+    topic = str(payload.get("topic", "")).strip() or "Cartoon Shorts"
+    cartoon_payload = _as_cartoon_payload(content)
+    render_cartoon_view(
+        topic=topic,
+        cartoon_payload=cartoon_payload,
+        config=CartoonRenderConfig(
+            build_button_key=f"agent_dashboard_cartoon_build_{scope}",
+            outputs_state_key=f"agent_dashboard_cartoon_outputs_{scope}",
+            output_error_state_key=f"agent_dashboard_cartoon_output_error_{scope}",
+            download_script_key=f"agent_dashboard_cartoon_script_{scope}",
+            download_project_key=f"agent_dashboard_cartoon_project_{scope}",
+            download_shorts_key=f"agent_dashboard_cartoon_shorts_{scope}",
+            download_widescreen_key=f"agent_dashboard_cartoon_widescreen_{scope}",
+        ),
+        build_cartoon_fn=build_cartoon_build_callback(context.cartoon_exporter),
     )

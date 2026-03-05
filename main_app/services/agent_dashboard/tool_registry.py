@@ -204,6 +204,7 @@ def build_default_agent_tool_registry(
         "quiz": "Builds quiz questions with answer keys.",
         "slideshow": "Creates presentation slides with optional code.",
         "video": "Generates narrated video payload and multi-voice script.",
+        "cartoon_shorts": "Generates cartoon short videos with multi-character dialogue and scene timeline.",
         "audio_overview": "Creates podcast-style multi-speaker audio scripts.",
         "report": "Generates long-form report documents.",
     }
@@ -224,7 +225,7 @@ def build_default_agent_tool_registry(
                 execution_spec={
                     "intent": intent,
                     "tool_key": intent.replace(" ", "_"),
-                    "stage_profile": "media_asset_profile" if intent in {"video", "audio_overview"} else "default_asset_profile",
+                    "stage_profile": "media_asset_profile" if intent in {"video", "cartoon_shorts", "audio_overview"} else "default_asset_profile",
                     "requirements_schema_key": intent,
                     "verify_profile": _default_verify_profile_by_intent(intent),
                     "verify_required": True,
@@ -247,7 +248,7 @@ def _default_verify_profile_by_intent(intent: str) -> str:
     normalized = normalize_intent(intent)
     if normalized in {"topic", "report"}:
         return "text_asset_verify"
-    if normalized in {"video", "audio_overview"}:
+    if normalized in {"video", "cartoon_shorts", "audio_overview"}:
         return "media_asset_verify"
     return "structured_asset_verify"
 
@@ -291,7 +292,7 @@ def _default_execution_policy_by_intent(intent: str) -> ToolExecutionPolicy:
     profile = "structured_policy_gate"
     if normalized in {"topic", "report"}:
         profile = "text_policy_gate"
-    elif normalized in {"video", "audio_overview"}:
+    elif normalized in {"video", "cartoon_shorts", "audio_overview"}:
         profile = "media_policy_gate"
     return {
         "timeout_ms": None,

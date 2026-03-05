@@ -6,6 +6,8 @@ from main_app.services.agent_dashboard import AgentDashboardService
 from main_app.services.audio_overview_service import AudioOverviewService
 from main_app.services.asset_history_service import AssetHistoryService
 from main_app.services.cached_llm_service import CachedLLMService
+from main_app.services.cartoon_exporter import CartoonExporter
+from main_app.services.cartoon_shorts_asset_service import CartoonShortsAssetService
 from main_app.services.quiz_exporter import QuizExporter
 from main_app.services.report_exporter import ReportExporter
 from main_app.services.slide_deck_exporter import SlideDeckExporter
@@ -28,6 +30,8 @@ def render_asset_history_tab(
     report_exporter: ReportExporter,
     slide_exporter: SlideDeckExporter,
     video_exporter: VideoExporter,
+    cartoon_service: CartoonShortsAssetService,
+    cartoon_exporter: CartoonExporter,
     custom_renderers: dict[str, Callable[[AssetHistoryRecord, AssetHistoryRenderContext], None]] | None = None,
 ) -> None:
     from main_app.ui.asset_history.record_renderer import render_asset_history_tab as _render_impl
@@ -44,5 +48,7 @@ def render_asset_history_tab(
         report_exporter=report_exporter,
         slide_exporter=slide_exporter,
         video_exporter=video_exporter,
+        cartoon_service=cartoon_service,
+        cartoon_exporter=cartoon_exporter,
         custom_renderers=custom_renderers,
     )

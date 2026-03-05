@@ -13,6 +13,7 @@ ASSET_TAB_TITLE_BY_INTENT: dict[str, str] = {
     "quiz": "Quiz",
     "slideshow": "Slide Show",
     "video": "Video Builder",
+    "cartoon_shorts": "Cartoon Shorts Studio",
     "audio_overview": "Audio Overview",
 }
 

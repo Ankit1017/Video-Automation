@@ -47,6 +47,8 @@ class TestAgentDashboardWebGroundingRuntime(unittest.TestCase):
             quiz_service=_NoopService(),  # type: ignore[arg-type]
             slideshow_service=_NoopService(),  # type: ignore[arg-type]
             video_service=None,
+            cartoon_service=None,
+            cartoon_export_service=None,
             audio_overview_service=_NoopService(),  # type: ignore[arg-type]
             report_service=_NoopService(),  # type: ignore[arg-type]
         )

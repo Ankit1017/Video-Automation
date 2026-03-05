@@ -9,6 +9,8 @@ from main_app.services.agent_dashboard import AgentDashboardService
 from main_app.services.audio_overview_service import AudioOverviewService
 from main_app.services.asset_history_service import AssetHistoryService
 from main_app.services.cached_llm_service import CachedLLMService
+from main_app.services.cartoon_exporter import CartoonExporter
+from main_app.services.cartoon_shorts_asset_service import CartoonShortsAssetService
 from main_app.services.quiz_exporter import QuizExporter
 from main_app.services.report_exporter import ReportExporter
 from main_app.services.slide_deck_exporter import SlideDeckExporter
@@ -36,6 +38,8 @@ def render_asset_history_tab(
     report_exporter: ReportExporter,
     slide_exporter: SlideDeckExporter,
     video_exporter: VideoExporter,
+    cartoon_service: CartoonShortsAssetService,
+    cartoon_exporter: CartoonExporter,
     custom_renderers: dict[str, RendererFn] | None = None,
 ) -> None:
     context = AssetHistoryRenderContext(
@@ -49,6 +53,8 @@ def render_asset_history_tab(
         slide_exporter=slide_exporter,
         video_service=video_service,
         video_exporter=video_exporter,
+        cartoon_service=cartoon_service,
+        cartoon_exporter=cartoon_exporter,
         custom_renderers=custom_renderers,
     )
     st.markdown(FLASHCARDS_CSS + QUIZ_TAB_CSS + SLIDESHOW_TAB_CSS + AUDIO_OVERVIEW_TAB_CSS, unsafe_allow_html=True)

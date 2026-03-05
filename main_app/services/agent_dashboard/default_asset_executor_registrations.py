@@ -9,6 +9,8 @@ from main_app.services.agent_dashboard.executor_plugins import (
 from main_app.services.agent_dashboard.executor_types import AssetExecutorRegistration
 from main_app.services.agent_dashboard.intent_catalog import ASSET_INTENTS
 from main_app.services.audio_overview_service import AudioOverviewService
+from main_app.services.cartoon_export_service import CartoonExportService
+from main_app.services.cartoon_shorts_asset_service import CartoonShortsAssetService
 from main_app.services.data_table_service import DataTableService
 from main_app.services.flashcards_service import FlashcardsService
 from main_app.services.mind_map_service import MindMapService
@@ -28,6 +30,8 @@ def build_default_asset_executor_registrations(
     quiz_service: QuizService,
     slideshow_service: SlideShowService,
     video_service: VideoAssetService | None = None,
+    cartoon_service: CartoonShortsAssetService | None = None,
+    cartoon_export_service: CartoonExportService | None = None,
     audio_overview_service: AudioOverviewService,
     report_service: ReportService,
 ) -> Iterable[AssetExecutorRegistration]:
@@ -39,6 +43,8 @@ def build_default_asset_executor_registrations(
         quiz_service=quiz_service,
         slideshow_service=slideshow_service,
         video_service=video_service,
+        cartoon_service=cartoon_service,
+        cartoon_export_service=cartoon_export_service,
         audio_overview_service=audio_overview_service,
         report_service=report_service,
     )

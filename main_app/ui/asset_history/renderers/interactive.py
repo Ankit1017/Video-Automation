@@ -5,9 +5,11 @@ from typing import Any, cast
 import streamlit as st
 
 from main_app.contracts import VideoPayload
+from main_app.contracts import CartoonPayload
 from main_app.models import AssetHistoryRecord
 from main_app.ui.asset_history.context import AssetHistoryRenderContext
 from main_app.ui.components.interactive_callbacks import (
+    build_cartoon_build_callback,
     build_flashcard_explain_callback,
     build_quiz_callbacks,
     build_video_build_callback,
@@ -15,11 +17,13 @@ from main_app.ui.components.interactive_callbacks import (
     first_non_empty_topic,
 )
 from main_app.ui.components import (
+    CartoonRenderConfig,
     FlashcardsRenderConfig,
     QuizRenderConfig,
     SlideshowRenderConfig,
     VideoRenderConfig,
     render_flashcards_view,
+    render_cartoon_view,
     render_quiz_view,
     render_slideshow_view,
     render_video_view,
@@ -36,6 +40,12 @@ def _video_payload(value: object) -> VideoPayload | None:
     if not isinstance(value, dict):
         return None
     return cast(VideoPayload, {str(key): item for key, item in value.items()})
+
+
+def _cartoon_payload(value: object) -> CartoonPayload | None:
+    if not isinstance(value, dict):
+        return None
+    return cast(CartoonPayload, {str(key): item for key, item in value.items()})
 
 
 def render_flashcards_record(record: AssetHistoryRecord, context: AssetHistoryRenderContext) -> None:
@@ -183,4 +193,29 @@ def render_video_record(record: AssetHistoryRecord, context: AssetHistoryRenderC
         slide_exporter=context.slide_exporter,
         synthesize_audio_fn=build_video_synthesize_callback(context.video_service),
         build_video_fn=build_video_build_callback(context.video_exporter),
+    )
+
+
+def render_cartoon_record(record: AssetHistoryRecord, context: AssetHistoryRenderContext) -> None:
+    payload = record.result_payload if isinstance(record.result_payload, dict) else {}
+    cartoon_payload = _cartoon_payload(payload)
+    if not cartoon_payload:
+        st.json(record.result_payload)
+        return
+
+    topic = first_non_empty_topic(record.topic, cartoon_payload.get("topic", ""), fallback="Cartoon Shorts")
+    scope = f"asset_history_cartoon_{record.id}"
+    render_cartoon_view(
+        topic=topic,
+        cartoon_payload=cartoon_payload,
+        config=CartoonRenderConfig(
+            build_button_key=f"{scope}_build",
+            outputs_state_key=f"{scope}_outputs",
+            output_error_state_key=f"{scope}_output_error",
+            download_script_key=f"{scope}_script",
+            download_project_key=f"{scope}_project",
+            download_shorts_key=f"{scope}_shorts",
+            download_widescreen_key=f"{scope}_widescreen",
+        ),
+        build_cartoon_fn=build_cartoon_build_callback(context.cartoon_exporter),
     )

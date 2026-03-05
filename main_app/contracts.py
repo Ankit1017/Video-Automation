@@ -17,6 +17,50 @@ SlideRepresentation: TypeAlias = Literal[
     "metric_cards",
 ]
 
+CartoonShortType: TypeAlias = Literal[
+    "educational_explainer",
+    "debate_discussion",
+    "story_sketch",
+    "news_brief",
+    "product_pitch",
+    "case_study",
+]
+
+CartoonOutputMode: TypeAlias = Literal[
+    "dual",
+    "shorts_9_16",
+    "widescreen_16_9",
+]
+
+CartoonShotType: TypeAlias = Literal[
+    "wide_establishing",
+    "medium_two_shot",
+    "close_single",
+    "over_shoulder",
+]
+
+CartoonCameraMove: TypeAlias = Literal[
+    "static",
+    "push_in",
+    "pull_out",
+    "pan_left",
+    "pan_right",
+]
+
+CartoonTransitionType: TypeAlias = Literal[
+    "cut",
+    "crossfade",
+    "fade_black",
+]
+
+CartoonMood: TypeAlias = Literal[
+    "neutral",
+    "energetic",
+    "tense",
+    "warm",
+    "inspiring",
+]
+
 
 class SlideContent(TypedDict, total=False):
     section: str
@@ -118,6 +162,87 @@ class VideoPayload(TypedDict, total=False):
     conversation_timeline: VideoConversationTimeline
     visual_refs: list[VideoVisualRef]
     render_profile: VideoRenderProfile
+    metadata: dict[str, JSONValue]
+
+
+class CartoonCharacterSpec(TypedDict, total=False):
+    id: str
+    name: str
+    role: str
+    color_hex: str
+    outfit_variant: str
+    voice: str
+
+
+class CartoonDialogueTurn(TypedDict, total=False):
+    turn_index: int
+    speaker_id: str
+    speaker_name: str
+    text: str
+    emotion: str
+    start_ms: int
+    end_ms: int
+    estimated_duration_ms: int
+
+
+class CartoonScene(TypedDict, total=False):
+    scene_index: int
+    title: str
+    hook: str
+    background_key: str
+    camera_preset: str
+    shot_type: CartoonShotType
+    camera_move: CartoonCameraMove
+    transition_in: CartoonTransitionType
+    transition_out: CartoonTransitionType
+    mood: CartoonMood
+    focus_character_id: str
+    duration_ms: int
+    turns: list[CartoonDialogueTurn]
+    visual_notes: str
+
+
+class CartoonTimeline(TypedDict, total=False):
+    scenes: list[CartoonScene]
+    total_duration_ms: int
+    scene_count: int
+    speaker_count: int
+    generated_with: str
+
+
+class CartoonRenderProfile(TypedDict, total=False):
+    profile_key: str
+    shorts_width: int
+    shorts_height: int
+    widescreen_width: int
+    widescreen_height: int
+    fps: int
+    gpu_available: bool
+    gpu_memory_mb: int
+    animation_level: str
+
+
+class CartoonOutputArtifact(TypedDict, total=False):
+    key: str
+    format: str
+    status: str
+    bytes: int
+    path_hint: str
+    mime: str
+
+
+class CartoonPayload(TypedDict, total=False):
+    topic: str
+    title: str
+    short_type: CartoonShortType
+    output_mode: CartoonOutputMode
+    language: str
+    hinglish_script: bool
+    character_roster: list[CartoonCharacterSpec]
+    timeline: CartoonTimeline
+    render_profile: CartoonRenderProfile
+    output_artifacts: list[CartoonOutputArtifact]
+    script_markdown: str
     metadata: dict[str, JSONValue]
 
 

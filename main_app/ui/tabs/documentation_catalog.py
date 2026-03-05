@@ -15,6 +15,9 @@ DOCS_WHITELIST: dict[str, str] = {
     "Debug Documentation Reference": "docs/DEBUG_DOCUMENTATION_REFERENCE.md",
     "Video Avatar Mode Guide": "docs/VIDEO_AVATAR_MODE_GUIDE.md",
     "Video Asset Creation E2E": "docs/VIDEO_ASSET_CREATION_E2E_SUMMARY.md",
+    "Cartoon Shorts User Guide": "docs/CARTOON_SHORTS_USER_GUIDE.md",
+    "Cartoon Shorts Architecture": "docs/CARTOON_SHORTS_ARCHITECTURE.md",
+    "Cartoon Shorts Debug Runbook": "docs/CARTOON_SHORTS_DEBUG_RUNBOOK.md",
     "Observability Architecture": "docs/OBSERVABILITY_ARCHITECTURE.md",
     "Observability Debug Cookbook": "docs/OBSERVABILITY_DEBUG_COOKBOOK.md",
     "Operations Runbook": "docs/OPERATIONS_RUNBOOK.md",
@@ -157,6 +160,26 @@ def get_ui_feature_catalog() -> dict[str, dict[str, Any]]:
                 "docs/UI_DOCUMENTATION_REFERENCE.md",
                 "docs/VIDEO_ASSET_CREATION_E2E_SUMMARY.md",
                 "docs/VIDEO_AVATAR_MODE_GUIDE.md",
+            ],
+        },
+        "Cartoon Shorts Studio": {
+            "purpose": "Create animated multi-character cartoon shorts with idea-to-script or manual timeline authoring.",
+            "inputs": ["Topic", "idea", "short type", "scene/speaker controls", "timeline source", "output mode"],
+            "outputs": ["Cartoon payload", "timeline diagnostics", "9:16 and/or 16:9 MP4 files"],
+            "typical_workflow": [
+                "Choose idea mode for automatic storyboard or manual mode for timeline JSON.",
+                "Generate asset and monitor stage-based background job progress.",
+                "Render dual outputs and download script/project/video artifacts.",
+            ],
+            "common_mistakes": [
+                "Invalid manual timeline JSON that skips speaker IDs or turn text.",
+                "Expecting dual-format render to complete instantly for long scene timelines.",
+            ],
+            "keywords": ["cartoon", "shorts", "timeline", "scene", "dual-format"],
+            "related_docs": [
+                "docs/CARTOON_SHORTS_USER_GUIDE.md",
+                "docs/CARTOON_SHORTS_ARCHITECTURE.md",
+                "docs/CARTOON_SHORTS_DEBUG_RUNBOOK.md",
             ],
         },
         "Audio Overview": {
@@ -329,6 +352,12 @@ def get_task_to_tab_matrix() -> list[dict[str, str]]:
             "primary_tab": "Slide Show",
             "supporting_tab": "Video Builder",
             "output_type": "Slides and rendered media",
+        },
+        {
+            "user_goal": "Create animated social media explainers",
+            "primary_tab": "Cartoon Shorts Studio",
+            "supporting_tab": "Agent Dashboard",
+            "output_type": "Cartoon short videos + project timeline",
         },
         {
             "user_goal": "Generate long-form formal output",

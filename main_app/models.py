@@ -6,6 +6,7 @@ from typing import Any, cast
 from main_app.contracts import (
     AssetArtifactEnvelope,
     AudioOverviewPayload,
+    CartoonPayload,
     DataTablePayload,
     IntentPayload,
     IntentPayloadMap,
@@ -158,6 +159,16 @@ class AudioOverviewGenerationResult:
     parse_error: str | None
     parse_note: str | None
     cache_hit: bool
+
+
+@dataclass
+class CartoonShortsGenerationResult:
+    cartoon_payload: CartoonPayload | None
+    parse_error: str | None
+    parse_notes: list[str]
+    cache_hits: int
+    total_calls: int
+    debug_raw: str | None
 
 
 @dataclass

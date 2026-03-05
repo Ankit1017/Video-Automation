@@ -220,8 +220,8 @@ def build_default_agent_workflow_registry() -> AgentWorkflowRegistry:
         AgentWorkflowDefinition(
             key="media_production_assets",
             title="Media Production Assets",
-            description="Generates presentation and media outputs: slideshow, video, audio overview, and report.",
-            tool_keys=["slideshow", "video", "audio_overview", "report"],
+            description="Generates presentation and media outputs: slideshow, video, cartoon shorts, audio overview, and report.",
+            tool_keys=["slideshow", "video", "cartoon_shorts", "audio_overview", "report"],
             tool_dependencies={"video": ["slideshow"]},
         )
     )

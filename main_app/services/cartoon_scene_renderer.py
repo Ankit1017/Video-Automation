@@ -1,0 +1,467 @@
+from __future__ import annotations
+
+from typing import Any
+
+from main_app.contracts import CartoonCharacterSpec, CartoonDialogueTurn, CartoonScene
+from main_app.services.cartoon_subtitle_service import CartoonSubtitleService
+
+
+class CartoonSceneRenderer:
+    def __init__(self, subtitle_service: CartoonSubtitleService | None = None) -> None:
+        self._subtitle_service = subtitle_service or CartoonSubtitleService()
+
+    def render_frame(
+        self,
+        *,
+        image_module: Any,
+        draw_module: Any,
+        font_module: Any,
+        width: int,
+        height: int,
+        topic: str,
+        scene: CartoonScene,
+        active_turn: CartoonDialogueTurn | None,
+        character_roster: list[CartoonCharacterSpec],
+        frame_index: int = 0,
+        frame_count: int = 1,
+        cinematic_mode: bool = True,
+    ) -> Any:
+        safe_frame_count = max(1, int(frame_count))
+        safe_frame_index = max(0, min(int(frame_index), safe_frame_count - 1))
+        progress = 0.0 if safe_frame_count <= 1 else safe_frame_index / float(safe_frame_count - 1)
+        if not cinematic_mode:
+            progress = 0.0
+
+        image = image_module.new("RGB", (width, height), color=self._background_color(scene.get("background_key")))
+        drawer = draw_module.Draw(image)
+
+        camera_shift_x, camera_shift_y, camera_zoom = _camera_transform(
+            camera_move=(_clean(scene.get("camera_move")).lower() if cinematic_mode else "static"),
+            progress=progress,
+        )
+
+        self._draw_background_layers(
+            drawer=drawer,
+            width=width,
+            height=height,
+            scene=scene,
+            progress=progress,
+            camera_shift_x=camera_shift_x,
+            camera_shift_y=camera_shift_y,
+            camera_zoom=camera_zoom,
+        )
+        self._draw_header(
+            drawer=drawer,
+            font_module=font_module,
+            width=width,
+            topic=topic,
+            scene_title=_clean(scene.get("title")) or "Scene",
+            mood=_clean(scene.get("mood")) or "neutral",
+            frame_bob=_sin_like(progress, period=0.5),
+        )
+        self._draw_characters(
+            drawer=drawer,
+            width=width,
+            height=height,
+            font_module=font_module,
+            character_roster=character_roster,
+            active_speaker_id=_clean((active_turn or {}).get("speaker_id")),
+            shot_type=_clean(scene.get("shot_type")) or "medium_two_shot",
+            focus_character_id=_clean(scene.get("focus_character_id")),
+            frame_index=safe_frame_index,
+            progress=progress,
+            camera_shift_x=camera_shift_x,
+            camera_shift_y=camera_shift_y,
+            camera_zoom=camera_zoom,
+        )
+        self._draw_subtitle(
+            drawer=drawer,
+            width=width,
+            height=height,
+            font_module=font_module,
+            active_turn=active_turn,
+            character_roster=character_roster,
+            progress=progress,
+        )
+
+        image = self._apply_grade(
+            image_module=image_module,
+            image=image,
+            mood=_clean(scene.get("mood")) or "neutral",
+        )
+        if cinematic_mode:
+            image = self._apply_transition_overlay(
+                image_module=image_module,
+                image=image,
+                transition_in=_clean(scene.get("transition_in")) or "cut",
+                transition_out=_clean(scene.get("transition_out")) or "cut",
+                progress=progress,
+            )
+        return image
+
+    @staticmethod
+    def _background_color(background_key: object) -> tuple[int, int, int]:
+        key = _clean(background_key).lower()
+        mapping = {
+            "studio_blue": (20, 30, 55),
+            "classroom_warm": (49, 37, 24),
+            "city_evening": (32, 28, 48),
+            "news_desk": (26, 26, 31),
+            "product_stage": (31, 20, 39),
+            "case_boardroom": (21, 32, 30),
+        }
+        return mapping.get(key, (22, 29, 44))
+
+    def _draw_background_layers(
+        self,
+        *,
+        drawer: Any,
+        width: int,
+        height: int,
+        scene: CartoonScene,
+        progress: float,
+        camera_shift_x: float,
+        camera_shift_y: float,
+        camera_zoom: float,
+    ) -> None:
+        bg = self._background_color(scene.get("background_key"))
+        sky_top = tuple(max(channel - 20, 0) for channel in bg)
+        sky_bottom = tuple(min(channel + 35, 255) for channel in bg)
+        for stripe in range(0, max(1, height // 24)):
+            y0 = stripe * 24
+            mix = stripe / float(max(1, height // 24))
+            color = (
+                int(sky_top[0] + (sky_bottom[0] - sky_top[0]) * mix),
+                int(sky_top[1] + (sky_bottom[1] - sky_top[1]) * mix),
+                int(sky_top[2] + (sky_bottom[2] - sky_top[2]) * mix),
+            )
+            drawer.rectangle((0, y0, width, min(height, y0 + 24)), fill=color)
+
+        horizon = int(height * (0.56 - (camera_zoom - 1.0) * 0.08))
+        drawer.rectangle((0, horizon, width, height), fill=(18, 23, 33))
+
+        base_parallax = _sin_like(progress, period=1.0) * 12.0
+        far_shift = int((camera_shift_x * 0.35) + (base_parallax * 0.35))
+        mid_shift = int((camera_shift_x * 0.65) + (base_parallax * 0.7))
+        near_shift = int((camera_shift_x * 1.1) + (base_parallax * 1.2))
+        cam_y = int(camera_shift_y)
+
+        for block in range(-2, 12):
+            x = (block * 140) + far_shift
+            h = 110 + ((block % 3) * 18)
+            drawer.rectangle((x, horizon - h + cam_y, x + 86, horizon + cam_y), fill=(35, 45, 70))
+        for block in range(-2, 10):
+            x = (block * 180) + mid_shift + 42
+            h = 80 + ((block % 4) * 14)
+            drawer.rectangle((x, horizon - h + 18 + cam_y, x + 110, horizon + 40 + cam_y), fill=(40, 55, 86))
+        for block in range(-2, 8):
+            x = (block * 230) + near_shift + 26
+            h = 64 + ((block % 2) * 18)
+            drawer.rounded_rectangle(
+                (x, horizon - h + 44 + cam_y, x + 136, horizon + 92 + cam_y),
+                radius=12,
+                fill=(58, 74, 112),
+            )
+
+    def _draw_header(
+        self,
+        *,
+        drawer: Any,
+        font_module: Any,
+        width: int,
+        topic: str,
+        scene_title: str,
+        mood: str,
+        frame_bob: float,
+    ) -> None:
+        title_font = _font(font_module=font_module, size=36, bold=True)
+        topic_font = _font(font_module=font_module, size=22, bold=False)
+        mood_text = mood.replace("_", " ").title()
+        y_offset = int(frame_bob * 3.0)
+        drawer.text((28, 16 + y_offset), scene_title, fill=(248, 250, 255), font=title_font)
+        drawer.text((28, 62 + y_offset), _clean(topic), fill=(205, 221, 248), font=topic_font)
+        drawer.text((width - 220, 24 + y_offset), f"Mood: {mood_text}", fill=(188, 209, 236), font=topic_font)
+        drawer.line((24, 100 + y_offset, width - 24, 100 + y_offset), fill=(78, 112, 158), width=2)
+
+    def _draw_characters(
+        self,
+        *,
+        drawer: Any,
+        width: int,
+        height: int,
+        font_module: Any,
+        character_roster: list[CartoonCharacterSpec],
+        active_speaker_id: str,
+        shot_type: str,
+        focus_character_id: str,
+        frame_index: int,
+        progress: float,
+        camera_shift_x: float,
+        camera_shift_y: float,
+        camera_zoom: float,
+    ) -> None:
+        roster = [item for item in character_roster if isinstance(item, dict)]
+        if not roster:
+            roster = [
+                {"id": "speaker_a", "name": "Speaker A", "color_hex": "#4F8EF7"},
+                {"id": "speaker_b", "name": "Speaker B", "color_hex": "#5BC0A8"},
+            ]
+        count = max(2, min(len(roster), 4))
+        name_font = _font(font_module=font_module, size=max(18, int(min(width, height) * 0.022)), bold=True)
+
+        base_radius = int(min(width, height) * 0.078)
+        if shot_type == "close_single":
+            base_radius = int(base_radius * 1.28)
+        elif shot_type == "wide_establishing":
+            base_radius = int(base_radius * 0.88)
+
+        if shot_type == "close_single":
+            active_index = _find_character_index(roster, active_speaker_id or focus_character_id)
+            if active_index < 0:
+                active_index = 0
+            indices = [active_index] + [idx for idx in range(count) if idx != active_index][:1]
+        else:
+            indices = list(range(count))
+
+        span = int(width * 0.68)
+        start_x = int(width * 0.16)
+        gap = int(span / max(1, len(indices) - 1))
+        base_y = int(height * 0.68)
+        motion_wave = _sin_like(progress, period=0.42)
+
+        for slot, idx in enumerate(indices):
+            character = roster[idx] if idx < len(roster) else roster[-1]
+            char_id = _clean(character.get("id"))
+            name = _clean(character.get("name")) or f"Speaker {slot + 1}"
+            center_x = start_x + (gap * slot)
+            center_y = base_y
+
+            center_x += int(camera_shift_x * 0.95)
+            center_y += int(camera_shift_y * 0.95)
+
+            if shot_type == "over_shoulder" and slot == 0:
+                center_x = int(width * 0.22 + camera_shift_x * 0.8)
+                center_y = int(height * 0.72 + camera_shift_y)
+            if shot_type == "over_shoulder" and slot == 1:
+                center_x = int(width * 0.72 + camera_shift_x * 0.7)
+                center_y = int(height * 0.64 + camera_shift_y * 0.8)
+
+            rgb = _hex_to_rgb(_clean(character.get("color_hex"))) or (95, 140, 210)
+            is_active = bool(active_speaker_id and char_id == active_speaker_id)
+
+            actor_zoom = camera_zoom * (1.08 if is_active else 1.0)
+            rr = max(22, int(base_radius * actor_zoom))
+            lift = int(rr * (0.12 if is_active else 0.04) + motion_wave * 3.0)
+
+            outline = (245, 247, 255) if is_active else (186, 198, 218)
+            outline_width = 6 if is_active else 3
+            drawer.ellipse(
+                (center_x - rr, center_y - rr - lift, center_x + rr, center_y + rr - lift),
+                fill=rgb,
+                outline=outline,
+                width=outline_width,
+            )
+
+            blink = frame_index % 47 in {0, 1}
+            eye_y = center_y - int(rr * 0.2) - lift
+            eye_dx = int(rr * 0.28)
+            eye_r = max(2, int(rr * 0.07))
+            if blink:
+                drawer.line(
+                    (center_x - eye_dx - eye_r, eye_y, center_x - eye_dx + eye_r, eye_y),
+                    fill=(18, 24, 34),
+                    width=2,
+                )
+                drawer.line(
+                    (center_x + eye_dx - eye_r, eye_y, center_x + eye_dx + eye_r, eye_y),
+                    fill=(18, 24, 34),
+                    width=2,
+                )
+            else:
+                drawer.ellipse(
+                    (center_x - eye_dx - eye_r, eye_y - eye_r, center_x - eye_dx + eye_r, eye_y + eye_r),
+                    fill=(18, 24, 34),
+                )
+                drawer.ellipse(
+                    (center_x + eye_dx - eye_r, eye_y - eye_r, center_x + eye_dx + eye_r, eye_y + eye_r),
+                    fill=(18, 24, 34),
+                )
+
+            mouth_center_y = center_y + int(rr * 0.18) - lift
+            mouth_w = int(rr * (0.55 if is_active else 0.34))
+            if is_active:
+                mouth_phase = (frame_index // 2) % 4
+                mouth_h = max(2, int(rr * (0.05 + (mouth_phase * 0.03))))
+                drawer.ellipse(
+                    (
+                        center_x - mouth_w // 2,
+                        mouth_center_y - mouth_h // 2,
+                        center_x + mouth_w // 2,
+                        mouth_center_y + mouth_h // 2,
+                    ),
+                    fill=(15, 18, 28),
+                )
+            else:
+                drawer.line(
+                    (center_x - mouth_w // 2, mouth_center_y, center_x + mouth_w // 2, mouth_center_y),
+                    fill=(20, 26, 38),
+                    width=3,
+                )
+
+            bbox = drawer.textbbox((0, 0), name, font=name_font)
+            text_w = max(0, bbox[2] - bbox[0])
+            drawer.text((center_x - text_w // 2, center_y + rr + 12 - lift), name, fill=(242, 246, 255), font=name_font)
+
+    def _draw_subtitle(
+        self,
+        *,
+        drawer: Any,
+        width: int,
+        height: int,
+        font_module: Any,
+        active_turn: CartoonDialogueTurn | None,
+        character_roster: list[CartoonCharacterSpec],
+        progress: float,
+    ) -> None:
+        if active_turn is None:
+            return
+        text = _clean(active_turn.get("text"))
+        if not text:
+            return
+        speaker_name = _clean(active_turn.get("speaker_name")) or "Speaker"
+        speaker_id = _clean(active_turn.get("speaker_id"))
+        subtitle = self._subtitle_service.compose_line(
+            speaker_name=speaker_name,
+            text=text,
+            max_chars=88,
+            max_lines=2,
+        )
+        if not subtitle:
+            return
+        lines = subtitle.splitlines() or [subtitle]
+        subtitle_font = _font(font_module=font_module, size=max(23, int(min(width, height) * 0.024)), bold=True)
+        block_height = int(height * (0.11 + (0.038 * (len(lines) - 1))))
+        top = height - block_height - 18
+        subtitle_color = self._subtitle_service.speaker_color(speaker_id, character_roster)
+
+        pop = 1.0 + (0.02 * _sin_like(progress, period=0.23))
+        left = int(36 - ((pop - 1.0) * 40.0))
+        right = int(width - 36 + ((pop - 1.0) * 40.0))
+        drawer.rounded_rectangle(
+            (left, top, right, height - 18),
+            radius=16,
+            fill=(8, 12, 20),
+            outline=(subtitle_color[0], subtitle_color[1], subtitle_color[2]),
+            width=3,
+        )
+
+        line_height = max(18, int(subtitle_font.size * 1.2)) if subtitle_font is not None else 26
+        text_total_h = line_height * len(lines)
+        baseline_y = top + max(8, (block_height - text_total_h) // 2)
+        for idx, line in enumerate(lines):
+            bbox = drawer.textbbox((0, 0), line, font=subtitle_font)
+            text_w = max(0, bbox[2] - bbox[0])
+            x = max(left + 22, (width - text_w) // 2)
+            y = baseline_y + (idx * line_height)
+            drawer.text((x, y), line, fill=(240, 246, 255), font=subtitle_font)
+
+    @staticmethod
+    def _apply_grade(*, image_module: Any, image: Any, mood: str) -> Any:
+        mood_key = _clean(mood).lower()
+        tint = {
+            "neutral": (14, 16, 24),
+            "energetic": (26, 18, 34),
+            "tense": (24, 16, 16),
+            "warm": (28, 20, 10),
+            "inspiring": (10, 20, 32),
+        }.get(mood_key, (14, 16, 24))
+        try:
+            overlay = image_module.new("RGB", image.size, tint)
+            return image_module.blend(image, overlay, 0.08)
+        except (AttributeError, OSError, RuntimeError, TypeError, ValueError):
+            return image
+
+    @staticmethod
+    def _apply_transition_overlay(
+        *,
+        image_module: Any,
+        image: Any,
+        transition_in: str,
+        transition_out: str,
+        progress: float,
+    ) -> Any:
+        in_key = _clean(transition_in).lower()
+        out_key = _clean(transition_out).lower()
+        alpha = 0.0
+        if in_key in {"crossfade", "fade_black"} and progress < 0.12:
+            alpha = max(alpha, (0.12 - progress) / 0.12 * (0.7 if in_key == "fade_black" else 0.45))
+        if out_key in {"crossfade", "fade_black"} and progress > 0.88:
+            alpha = max(alpha, (progress - 0.88) / 0.12 * (0.7 if out_key == "fade_black" else 0.45))
+        if alpha <= 0.0:
+            return image
+        try:
+            overlay = image_module.new("RGB", image.size, (0, 0, 0))
+            return image_module.blend(image, overlay, min(alpha, 0.8))
+        except (AttributeError, OSError, RuntimeError, TypeError, ValueError):
+            return image
+
+
+def _font(*, font_module: Any, size: int, bold: bool) -> Any:
+    candidates = [
+        "C:\\Windows\\Fonts\\arialbd.ttf" if bold else "C:\\Windows\\Fonts\\arial.ttf",
+        "C:\\Windows\\Fonts\\segoeuib.ttf" if bold else "C:\\Windows\\Fonts\\segoeui.ttf",
+    ]
+    for path in candidates:
+        try:
+            return font_module.truetype(path, size)
+        except (AttributeError, OSError, ValueError):
+            continue
+    try:
+        return font_module.load_default()
+    except (AttributeError, OSError, ValueError):
+        return None
+
+
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int] | None:
+    cleaned = hex_color.strip().lstrip("#")
+    if len(cleaned) != 6:
+        return None
+    try:
+        return tuple(int(cleaned[i : i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
+    except ValueError:
+        return None
+
+
+def _camera_transform(*, camera_move: str, progress: float) -> tuple[float, float, float]:
+    move = _clean(camera_move).lower()
+    if move == "push_in":
+        return 0.0, -2.0, 1.0 + (0.08 * progress)
+    if move == "pull_out":
+        return 0.0, 1.0, 1.08 - (0.08 * progress)
+    if move == "pan_left":
+        return -24.0 * progress, 0.0, 1.0
+    if move == "pan_right":
+        return 24.0 * progress, 0.0, 1.0
+    return 0.0, 0.0, 1.0
+
+
+def _find_character_index(roster: list[CartoonCharacterSpec], character_id: str) -> int:
+    target = _clean(character_id).lower()
+    if not target:
+        return -1
+    for idx, item in enumerate(roster):
+        if _clean(item.get("id")).lower() == target:
+            return idx
+    return -1
+
+
+def _clean(value: object) -> str:
+    return " ".join(str(value or "").split()).strip()
+
+
+def _sin_like(progress: float, *, period: float) -> float:
+    safe_period = max(period, 0.05)
+    normalized = (progress / safe_period) % 1.0
+    if normalized <= 0.5:
+        return (normalized * 2.0) - 0.5
+    return 0.5 - ((normalized - 0.5) * 2.0)

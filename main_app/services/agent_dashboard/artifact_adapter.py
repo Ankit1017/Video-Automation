@@ -14,6 +14,8 @@ ARTIFACT_QUIZ_DATA = "artifact.quiz.data"
 ARTIFACT_SLIDESHOW_SLIDES = "artifact.slideshow.slides"
 ARTIFACT_VIDEO_PAYLOAD = "artifact.video.payload"
 ARTIFACT_VIDEO_AUDIO = "artifact.video.audio"
+ARTIFACT_CARTOON_PAYLOAD = "artifact.cartoon_shorts.payload"
+ARTIFACT_CARTOON_OUTPUTS = "artifact.cartoon_shorts.outputs"
 ARTIFACT_AUDIO_OVERVIEW_PAYLOAD = "artifact.audio_overview.payload"
 ARTIFACT_AUDIO_OVERVIEW_AUDIO = "artifact.audio_overview.audio"
 ARTIFACT_REPORT_TEXT = "artifact.report.text"
@@ -35,6 +37,8 @@ def default_produced_artifact_keys_by_intent(intent: str) -> list[str]:
         return [ARTIFACT_SLIDESHOW_SLIDES]
     if normalized == "video":
         return [ARTIFACT_VIDEO_PAYLOAD, ARTIFACT_VIDEO_AUDIO]
+    if normalized == "cartoon_shorts":
+        return [ARTIFACT_CARTOON_PAYLOAD, ARTIFACT_CARTOON_OUTPUTS]
     if normalized == "audio_overview":
         return [ARTIFACT_AUDIO_OVERVIEW_PAYLOAD, ARTIFACT_AUDIO_OVERVIEW_AUDIO]
     if normalized == "report":
@@ -53,6 +57,8 @@ def default_optional_required_artifact_keys_by_intent(intent: str) -> list[str]:
     normalized = " ".join(str(intent).strip().split()).lower()
     if normalized in {"mindmap", "flashcards", "data table", "quiz", "slideshow", "audio_overview"}:
         return [ARTIFACT_TOPIC_TEXT]
+    if normalized == "cartoon_shorts":
+        return [ARTIFACT_TOPIC_TEXT]
     if normalized == "report":
         return [
             ARTIFACT_TOPIC_TEXT,
@@ -62,6 +68,7 @@ def default_optional_required_artifact_keys_by_intent(intent: str) -> list[str]:
             ARTIFACT_QUIZ_DATA,
             ARTIFACT_SLIDESHOW_SLIDES,
             ARTIFACT_VIDEO_PAYLOAD,
+            ARTIFACT_CARTOON_PAYLOAD,
             ARTIFACT_AUDIO_OVERVIEW_PAYLOAD,
         ]
     return []
@@ -212,6 +219,8 @@ def _content_kind_for_intent(intent: str, content: JSONValue) -> str:
         return "mindmap"
     if normalized in {"video"}:
         return "video"
+    if normalized in {"cartoon_shorts"}:
+        return "video"
     if normalized in {"audio_overview"}:
         return "audio"
     return "data"
@@ -226,6 +235,7 @@ def _primary_section_key_for_intent(intent: str) -> str:
         "quiz": ARTIFACT_QUIZ_DATA,
         "slideshow": ARTIFACT_SLIDESHOW_SLIDES,
         "video": ARTIFACT_VIDEO_PAYLOAD,
+        "cartoon_shorts": ARTIFACT_CARTOON_PAYLOAD,
         "audio_overview": ARTIFACT_AUDIO_OVERVIEW_PAYLOAD,
         "report": ARTIFACT_REPORT_TEXT,
     }
