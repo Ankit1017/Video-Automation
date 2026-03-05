@@ -3,7 +3,7 @@
   "pack_version": "v1",
   "pack_schema_version": "v2",
   "cache_fps": 24,
-  "cache_resolution": "1024x1024",
+  "cache_resolution": "192x192",
   "license": "Commercial-friendly internal asset pack",
   "characters": [
     {
@@ -105,8 +105,9 @@
   ],
   "emotion_keys": [
     "neutral",
-    "excited",
-    "curious",
-    "serious"
+    "energetic",
+    "tense",
+    "warm",
+    "inspiring"
   ]
 }
