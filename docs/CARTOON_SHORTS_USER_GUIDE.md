@@ -14,6 +14,8 @@
    - `Scenes`
    - `Characters`
    - `Output Mode`
+   - `Timeline Schema Version` (`v2` recommended, `v1` legacy)
+   - `Quality Tier` (`auto | light | balanced | high`)
    - `Language`
    - `Cinematic Story Mode` (recommended)
 4. Choose timeline source:
@@ -63,9 +65,41 @@ Extended cinematic scene fields (optional but recommended):
 - `mood`: `neutral | energetic | tense | warm | inspiring`
 - `focus_character_id`: speaker id to emphasize in close shots
 
+### Timeline v2 required fields
+
+When `Timeline Schema Version = v2`, each scene must include:
+
+- `camera_track.keyframes[]` with `t_ms,x,y,zoom,rotation,ease`
+- `character_tracks[]` with `character_id` and keyframes:
+  `t_ms,x_norm,y_norm,scale,rotation,pose,emotion,opacity,z_index,ease`
+- Optional `subtitle_track` with `y_norm,max_lines,style`
+
+If these fields are missing in manual JSON, generation fails in strict v2 mode.
+
+## Character Pack v2 requirements
+
+For v2 rendering, each character must provide:
+
+- `asset_mode: lottie_cache`
+- `lottie_source`
+- `cache_root`
+- `state_map`
+- `anchor`, `default_scale`, `z_layer`
+
+Cache folder layout:
+
+- `characters/<char_id>/cache/<state>/<variant>/f####.png`
+
+Required state coverage:
+
+- States: `idle`, `blink`, `talk`
+- Emotions: `neutral`, `energetic`, `tense`, `warm`, `inspiring`
+- Talk visemes: `A,B,C,D,E,F,G,H,X`
+
 ## Tips
 
 - Keep turns concise for better pacing.
 - Use 2-4 speakers max for clean layout.
 - Keep `Cinematic Story Mode` on for richer camera motion and scene transitions.
+- Use `Quality Tier = auto` for hardware-aware defaults.
 - If manual JSON is rejected, validate `scenes[]` and `turns[]` first.

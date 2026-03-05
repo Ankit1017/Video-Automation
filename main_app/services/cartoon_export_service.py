@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 import base64
@@ -14,9 +14,13 @@ from main_app.contracts import (
     CartoonDialogueTurn,
     CartoonOutputArtifact,
     CartoonPayload,
+    CartoonQualityTier,
     CartoonRenderProfile,
     CartoonScene,
 )
+from main_app.services.cartoon_character_asset_validator import CartoonCharacterAssetValidator
+from main_app.services.cartoon_lottie_cache_service import CartoonLottieCacheService
+from main_app.services.cartoon_motion_planner_service import CartoonMotionPlannerService
 from main_app.services.cartoon_render_profile_service import CartoonRenderProfileService
 from main_app.services.cartoon_scene_renderer import CartoonSceneRenderer
 from main_app.services.observability_service import ensure_request_id
@@ -47,6 +51,7 @@ class CartoonExportService:
         self._telemetry_service = telemetry_service
         self._profile_service = CartoonRenderProfileService()
         self._scene_renderer = CartoonSceneRenderer()
+        self._motion_planner = CartoonMotionPlannerService()
 
     def build_cartoon_mp4s(
         self,
@@ -60,11 +65,14 @@ class CartoonExportService:
         started_at = perf_counter()
         profile = render_profile or self._profile_service.select_profile()
         selected_mode = _resolve_output_mode(output_mode=output_mode, payload=cartoon_payload)
+        timeline_schema_version = _resolve_timeline_schema_version(payload=cartoon_payload)
+        quality_tier = _resolve_quality_tier(payload=cartoon_payload, profile=profile)
         cinematic_mode = _bool_from_metadata(payload=cartoon_payload, key="cinematic_story_mode", default=True)
-        targets = self._build_targets(profile=profile, output_mode=selected_mode)
+        targets = self._build_targets(profile=profile, output_mode=selected_mode, quality_tier=quality_tier)
         render_root: Path | None = None
         outputs: dict[str, bytes] = {}
         output_artifacts: list[CartoonOutputArtifact] = []
+        lottie_cache_service: CartoonLottieCacheService | None = None
 
         if self._telemetry_service is not None:
             with self._telemetry_service.context_scope(request_id=request_id):
@@ -80,13 +88,24 @@ class CartoonExportService:
                             "target_count": len(targets),
                             "profile_key": str(profile.get("profile_key", "unknown")),
                             "cinematic_mode": cinematic_mode,
+                            "timeline_schema_version": timeline_schema_version,
+                            "quality_tier": quality_tier,
                         },
                     )
                 )
                 self._telemetry_service.record_metric(
                     name="cartoon_scene_count",
                     value=float(len(_timeline_scenes(cartoon_payload))),
-                    attrs={"output_mode": selected_mode},
+                    attrs={"output_mode": selected_mode, "quality_tier": quality_tier},
+                )
+                self._telemetry_service.record_event(
+                    ObservabilityEvent(
+                        event_name="cartoon.render.quality_tier",
+                        component="export.cartoon",
+                        status="ok",
+                        timestamp=_now_iso(),
+                        attributes={"quality_tier": quality_tier},
+                    )
                 )
 
         try:
@@ -109,6 +128,53 @@ class CartoonExportService:
                 except (ValueError, OSError):
                     pass
 
+            if timeline_schema_version == "v2":
+                pack_root = _pack_root_from_payload(cartoon_payload)
+                lottie_cache_service = CartoonLottieCacheService(pack_root=pack_root)
+                if self._telemetry_service is not None:
+                    self._telemetry_service.record_event(
+                        ObservabilityEvent(
+                            event_name="cartoon.pack.validate.start",
+                            component="export.cartoon",
+                            status="started",
+                            timestamp=_now_iso(),
+                            attributes={"pack_root": str(pack_root)},
+                        )
+                    )
+                validator = CartoonCharacterAssetValidator(pack_root=pack_root)
+                validation_errors = validator.validate_roster(
+                    roster=cast(list[CartoonCharacterSpec], cartoon_payload.get("character_roster", [])),
+                    require_lottie_cache=True,
+                    timeline_schema_version=timeline_schema_version,
+                )
+                if validation_errors:
+                    if self._telemetry_service is not None:
+                        self._telemetry_service.record_metric(
+                            name="cartoon_pack_validation_failures_total",
+                            value=float(len(validation_errors)),
+                            attrs={"timeline_schema_version": timeline_schema_version},
+                        )
+                        self._telemetry_service.record_event(
+                            ObservabilityEvent(
+                                event_name="cartoon.pack.validate.end",
+                                component="export.cartoon",
+                                status="error",
+                                timestamp=_now_iso(),
+                                attributes={"errors": len(validation_errors)},
+                            )
+                        )
+                    return {}, f"Cartoon pack validation failed: {validation_errors[0]}"
+                if self._telemetry_service is not None:
+                    self._telemetry_service.record_event(
+                        ObservabilityEvent(
+                            event_name="cartoon.pack.validate.end",
+                            component="export.cartoon",
+                            status="ok",
+                            timestamp=_now_iso(),
+                            attributes={"errors": 0},
+                        )
+                    )
+
             for target in targets:
                 if self._telemetry_service is not None:
                     self._telemetry_service.record_event(
@@ -117,7 +183,13 @@ class CartoonExportService:
                             component="export.cartoon",
                             status="started",
                             timestamp=_now_iso(),
-                            attributes={"format_key": target.key, "width": target.width, "height": target.height, "fps": target.fps},
+                            attributes={
+                                "format_key": target.key,
+                                "width": target.width,
+                                "height": target.height,
+                                "fps": target.fps,
+                                "quality_tier": quality_tier,
+                            },
                         )
                     )
                 clips: list[Any] = []
@@ -145,6 +217,16 @@ class CartoonExportService:
                             scene_start_ms + scene_duration_ms,
                             timed_turns[-1].end_ms if timed_turns else scene_start_ms + scene_duration_ms,
                         )
+                        if self._telemetry_service is not None and timeline_schema_version == "v2":
+                            self._telemetry_service.record_event(
+                                ObservabilityEvent(
+                                    event_name="cartoon.timeline.v2.scene",
+                                    component="export.cartoon",
+                                    status="ok",
+                                    timestamp=_now_iso(),
+                                    attributes={"scene_index": scene_idx, "frame_total": frame_total},
+                                )
+                            )
                         for frame_idx in range(frame_total):
                             frame_path = render_root / f"{target.key}_scene_{scene_idx:03d}_f{frame_idx:04d}.png"
                             if frame_total <= 1:
@@ -158,6 +240,24 @@ class CartoonExportService:
                                 segment=(active_timed_turn.segment if active_timed_turn is not None else None),
                                 time_ms=frame_time_ms,
                             )
+                            frame_plan = None
+                            if timeline_schema_version == "v2":
+                                frame_plan = self._motion_planner.plan_frame(
+                                    scene=scene,
+                                    character_roster=cast(list[CartoonCharacterSpec], cartoon_payload.get("character_roster", [])),
+                                    scene_relative_ms=max(0, frame_time_ms - scene_start_ms),
+                                    scene_duration_ms=scene_duration_ms,
+                                    active_turn=active_turn,
+                                    active_mouth=active_mouth,
+                                )
+                                if isinstance(frame_plan, dict):
+                                    frame_plan["fps"] = target.fps
+                                if self._telemetry_service is not None:
+                                    self._telemetry_service.record_metric(
+                                        name="cartoon.motion.plan.frames_total",
+                                        value=1.0,
+                                        attrs={"scene_index": str(scene_idx)},
+                                    )
                             frame = self._scene_renderer.render_frame(
                                 image_module=Image,
                                 draw_module=ImageDraw,
@@ -172,6 +272,9 @@ class CartoonExportService:
                                 frame_index=frame_idx,
                                 frame_count=frame_total,
                                 cinematic_mode=cinematic_mode,
+                                frame_plan=frame_plan,
+                                lottie_cache_service=lottie_cache_service,
+                                timeline_schema_version=timeline_schema_version,
                             )
                             frame.save(frame_path)
                             clip_paths.append(frame_path)
@@ -281,15 +384,28 @@ class CartoonExportService:
                         )
                     )
 
+            if self._telemetry_service is not None and lottie_cache_service is not None:
+                self._telemetry_service.record_metric(
+                    name="cartoon.sprite.cache_miss_total",
+                    value=float(lottie_cache_service.cache_miss_count),
+                    attrs={"timeline_schema_version": timeline_schema_version},
+                )
+
             cartoon_payload["output_artifacts"] = output_artifacts
             cartoon_payload["render_profile"] = profile
+            cartoon_payload["quality_tier"] = quality_tier
+            cartoon_payload["timeline_schema_version"] = cast(Any, timeline_schema_version)
             duration_ms = max((perf_counter() - started_at) * 1000.0, 0.0)
             if self._telemetry_service is not None:
                 with self._telemetry_service.context_scope(request_id=request_id):
                     self._telemetry_service.record_metric(
                         name="cartoon_render_duration_ms",
                         value=duration_ms,
-                        attrs={"output_mode": selected_mode, "status": "ok" if outputs else "error"},
+                        attrs={
+                            "output_mode": selected_mode,
+                            "status": "ok" if outputs else "error",
+                            "quality_tier": quality_tier,
+                        },
                     )
                     self._telemetry_service.record_event(
                         ObservabilityEvent(
@@ -302,6 +418,7 @@ class CartoonExportService:
                                 "output_count": len(outputs),
                                 "profile_key": str(profile.get("profile_key", "unknown")),
                                 "cinematic_mode": cinematic_mode,
+                                "quality_tier": quality_tier,
                             },
                         )
                     )
@@ -330,8 +447,14 @@ class CartoonExportService:
             if render_root is not None:
                 self._cleanup_render_workdir(render_root)
 
-    def _build_targets(self, *, profile: CartoonRenderProfile, output_mode: str) -> list[_RenderTarget]:
-        fps = max(12, _int_safe(profile.get("fps"), default=24))
+    def _build_targets(
+        self,
+        *,
+        profile: CartoonRenderProfile,
+        output_mode: str,
+        quality_tier: CartoonQualityTier,
+    ) -> list[_RenderTarget]:
+        fps = _tier_adjusted_fps(_int_safe(profile.get("fps"), default=24), quality_tier=quality_tier)
         targets: list[_RenderTarget] = []
         if output_mode in {"dual", "shorts_9_16"}:
             targets.append(
@@ -370,6 +493,52 @@ def _resolve_output_mode(*, output_mode: str | None, payload: CartoonPayload) ->
     if raw in {"shorts_9_16", "widescreen_16_9", "dual"}:
         return raw
     return "dual"
+
+
+def _resolve_timeline_schema_version(*, payload: CartoonPayload) -> str:
+    metadata = payload.get("metadata", {})
+    metadata_map = metadata if isinstance(metadata, dict) else {}
+    candidates = [payload.get("timeline_schema_version"), metadata_map.get("timeline_schema_version")]
+    for candidate in candidates:
+        if _clean(candidate).lower() == "v2":
+            return "v2"
+    return "v1"
+
+
+def _resolve_quality_tier(*, payload: CartoonPayload, profile: CartoonRenderProfile) -> CartoonQualityTier:
+    metadata = payload.get("metadata", {})
+    metadata_map = metadata if isinstance(metadata, dict) else {}
+    raw = _clean(payload.get("quality_tier") or metadata_map.get("quality_tier") or "auto").lower()
+    if raw == "auto":
+        profile_key = _clean(profile.get("profile_key")).lower()
+        if profile_key == "gpu_high":
+            return cast(CartoonQualityTier, "high")
+        if profile_key == "gpu_balanced":
+            return cast(CartoonQualityTier, "balanced")
+        return cast(CartoonQualityTier, "light")
+    if raw in {"light", "balanced", "high"}:
+        return cast(CartoonQualityTier, raw)
+    return cast(CartoonQualityTier, "balanced")
+
+
+def _tier_adjusted_fps(base_fps: int, *, quality_tier: CartoonQualityTier) -> int:
+    safe = max(12, int(base_fps))
+    if quality_tier == "light":
+        return max(12, min(24, int(round(safe * 0.7))))
+    if quality_tier == "high":
+        return max(safe, 30)
+    return max(16, safe)
+
+
+def _pack_root_from_payload(payload: CartoonPayload) -> Path:
+    metadata = payload.get("metadata", {})
+    metadata_map = metadata if isinstance(metadata, dict) else {}
+    pack = metadata_map.get("pack")
+    if isinstance(pack, dict):
+        pack_root = _clean(pack.get("pack_root"))
+        if pack_root:
+            return Path(pack_root)
+    return Path(__file__).resolve().parents[1] / "assets" / "cartoon_packs" / "default"
 
 
 def _timeline_scenes(payload: CartoonPayload) -> list[CartoonScene]:

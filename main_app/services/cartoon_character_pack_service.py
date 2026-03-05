@@ -30,6 +30,13 @@ class CartoonCharacterPackService:
                         "color_hex": _clean(item.get("color_hex")) or "#5AA9FF",
                         "outfit_variant": _clean(item.get("outfit_variant")) or "default",
                         "voice": _clean(item.get("voice")) or "",
+                        "asset_mode": _clean(item.get("asset_mode")) or "procedural",
+                        "lottie_source": _clean(item.get("lottie_source")),
+                        "cache_root": _clean(item.get("cache_root")) or f"characters/{_clean(item.get('id')) or f'char_{len(roster) + 1}'}/cache",
+                        "state_map": _dict_safe(item.get("state_map")),
+                        "anchor": _anchor_map(item.get("anchor")),
+                        "default_scale": _float_safe(item.get("default_scale"), default=1.0),
+                        "z_layer": _int_safe(item.get("z_layer"), default=len(roster)),
                     },
                 )
                 roster.append(character)
@@ -50,7 +57,13 @@ class CartoonCharacterPackService:
             "pack_root": str(self._pack_root),
             "pack_name": _clean(manifest.get("pack_name")) or "default",
             "pack_version": _clean(manifest.get("pack_version")) or "v1",
+            "pack_schema_version": _clean(manifest.get("pack_schema_version")) or "v1",
+            "cache_fps": _int_safe(manifest.get("cache_fps"), default=24),
+            "cache_resolution": _clean(manifest.get("cache_resolution")) or "unknown",
         }
+
+    def pack_root_path(self) -> Path:
+        return self._pack_root
 
     def _load_manifest(self) -> dict[str, Any]:
         path = self._pack_root / "manifest.json"
@@ -76,6 +89,13 @@ class CartoonCharacterPackService:
                     "color_hex": "#4F8EF7",
                     "outfit_variant": "hoodie_blue",
                     "voice": "female_1",
+                    "asset_mode": "procedural",
+                    "lottie_source": "",
+                    "cache_root": "characters/ava/cache",
+                    "state_map": {},
+                    "anchor": {"x": 0.5, "y": 1.0},
+                    "default_scale": 1.0,
+                    "z_layer": 0,
                 },
             ),
             cast(
@@ -87,6 +107,13 @@ class CartoonCharacterPackService:
                     "color_hex": "#5BC0A8",
                     "outfit_variant": "shirt_green",
                     "voice": "male_1",
+                    "asset_mode": "procedural",
+                    "lottie_source": "",
+                    "cache_root": "characters/noah/cache",
+                    "state_map": {},
+                    "anchor": {"x": 0.5, "y": 1.0},
+                    "default_scale": 1.0,
+                    "z_layer": 1,
                 },
             ),
             cast(
@@ -98,6 +125,13 @@ class CartoonCharacterPackService:
                     "color_hex": "#F39C6B",
                     "outfit_variant": "jacket_orange",
                     "voice": "female_2",
+                    "asset_mode": "procedural",
+                    "lottie_source": "",
+                    "cache_root": "characters/mia/cache",
+                    "state_map": {},
+                    "anchor": {"x": 0.5, "y": 1.0},
+                    "default_scale": 1.0,
+                    "z_layer": 2,
                 },
             ),
             cast(
@@ -109,6 +143,13 @@ class CartoonCharacterPackService:
                     "color_hex": "#BA8CFF",
                     "outfit_variant": "shirt_purple",
                     "voice": "male_2",
+                    "asset_mode": "procedural",
+                    "lottie_source": "",
+                    "cache_root": "characters/liam/cache",
+                    "state_map": {},
+                    "anchor": {"x": 0.5, "y": 1.0},
+                    "default_scale": 1.0,
+                    "z_layer": 3,
                 },
             ),
         ]
@@ -117,3 +158,39 @@ class CartoonCharacterPackService:
 def _clean(value: object) -> str:
     return " ".join(str(value or "").split()).strip()
 
+
+def _dict_safe(value: object) -> dict[str, object]:
+    if isinstance(value, dict):
+        return {str(key): item for key, item in value.items()}
+    return {}
+
+
+def _anchor_map(value: object) -> dict[str, float]:
+    if isinstance(value, dict):
+        return {
+            "x": _float_safe(value.get("x"), default=0.5),
+            "y": _float_safe(value.get("y"), default=1.0),
+        }
+    return {"x": 0.5, "y": 1.0}
+
+
+def _int_safe(value: object, *, default: int) -> int:
+    try:
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, (int, float, str)):
+            return int(value)
+        return int(str(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _float_safe(value: object, *, default: float) -> float:
+    try:
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, (int, float, str)):
+            return float(value)
+        return float(str(value))
+    except (TypeError, ValueError):
+        return default

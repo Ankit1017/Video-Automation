@@ -55,8 +55,10 @@ class CartoonStoryboardService:
         settings: GroqSettings,
         language: str,
         use_hinglish_script: bool,
+        timeline_schema_version: str = "v1",
     ) -> tuple[CartoonTimeline, str | None, list[str], int, int, str | None]:
         notes: list[str] = []
+        schema_version = _normalize_timeline_schema_version(timeline_schema_version)
         prompt = self._build_prompt(
             topic=topic,
             idea=idea,
@@ -65,6 +67,7 @@ class CartoonStoryboardService:
             scene_count=scene_count,
             language=language,
             use_hinglish_script=use_hinglish_script,
+            timeline_schema_version=schema_version,
         )
         raw_text = ""
         cache_hits = 0
@@ -95,10 +98,11 @@ class CartoonStoryboardService:
                 short_type=short_type,
                 character_roster=character_roster,
                 scene_count=scene_count,
+                timeline_schema_version=schema_version,
             )
             return timeline, None, notes, cache_hits, total_calls, raw_text or None
 
-        timeline, parse_error = self._parse_timeline(raw_text)
+        timeline, parse_error = self._parse_timeline(raw_text, timeline_schema_version=schema_version)
         if parse_error:
             notes.append(f"Storyboard parse fallback used: {parse_error}")
             timeline = self._fallback_timeline(
@@ -107,12 +111,13 @@ class CartoonStoryboardService:
                 short_type=short_type,
                 character_roster=character_roster,
                 scene_count=scene_count,
+                timeline_schema_version=schema_version,
             )
             return timeline, None, notes, cache_hits, total_calls, raw_text or None
 
         return timeline, None, notes, cache_hits, total_calls, raw_text or None
 
-    def _parse_timeline(self, raw_text: str) -> tuple[CartoonTimeline, str | None]:
+    def _parse_timeline(self, raw_text: str, *, timeline_schema_version: str) -> tuple[CartoonTimeline, str | None]:
         cleaned = " ".join(str(raw_text or "").split()).strip()
         if not cleaned:
             return cast(CartoonTimeline, {}), "Empty storyboard payload."
@@ -176,11 +181,22 @@ class CartoonStoryboardService:
                         "duration_ms": max(3000, sum(_int_safe(turn.get("estimated_duration_ms"), default=2500) for turn in turns)),
                         "turns": turns,
                         "visual_notes": _clean(scene.get("visual_notes")),
+                        "camera_track": _camera_track_field(scene.get("camera_track")) if timeline_schema_version == "v2" else {},
+                        "character_tracks": _character_tracks_field(scene.get("character_tracks")) if timeline_schema_version == "v2" else [],
+                        "subtitle_track": _subtitle_track_field(scene.get("subtitle_track")) if timeline_schema_version == "v2" else {},
                     },
                 )
             )
         if not scenes:
             return cast(CartoonTimeline, {}), "No valid scenes in storyboard."
+        if timeline_schema_version == "v2":
+            for scene in scenes:
+                camera_track = scene.get("camera_track", {})
+                character_tracks = scene.get("character_tracks", [])
+                if not isinstance(camera_track, dict) or not isinstance(camera_track.get("keyframes", []), list) or not camera_track.get("keyframes", []):
+                    return cast(CartoonTimeline, {}), "Storyboard v2 camera_track missing."
+                if not isinstance(character_tracks, list) or not character_tracks:
+                    return cast(CartoonTimeline, {}), "Storyboard v2 character_tracks missing."
         total_ms = sum(_int_safe(scene.get("duration_ms"), default=0) for scene in scenes)
         speaker_ids = {
             _clean(turn.get("speaker_id"))
@@ -196,7 +212,7 @@ class CartoonStoryboardService:
                     "total_duration_ms": total_ms,
                     "scene_count": len(scenes),
                     "speaker_count": len(speaker_ids),
-                    "generated_with": "llm_storyboard_v1",
+                    "generated_with": "llm_storyboard_v2" if timeline_schema_version == "v2" else "llm_storyboard_v1",
                 },
             ),
             None,
@@ -210,6 +226,7 @@ class CartoonStoryboardService:
         short_type: CartoonShortType,
         character_roster: list[CartoonCharacterSpec],
         scene_count: int,
+        timeline_schema_version: str,
     ) -> CartoonTimeline:
         safe_topic = _clean(topic) or "Topic"
         safe_idea = _clean(idea) or f"A short on {safe_topic}."
@@ -275,6 +292,16 @@ class CartoonStoryboardService:
                         "duration_ms": sum(_int_safe(turn.get("estimated_duration_ms"), default=2500) for turn in turns),
                         "turns": turns,
                         "visual_notes": f"Template: {short_type}",
+                        "camera_track": _default_camera_track(scene_duration_ms=sum(_int_safe(turn.get("estimated_duration_ms"), default=2500) for turn in turns))
+                        if timeline_schema_version == "v2"
+                        else {},
+                        "character_tracks": _default_character_tracks(
+                            character_roster=character_roster,
+                            scene_duration_ms=sum(_int_safe(turn.get("estimated_duration_ms"), default=2500) for turn in turns),
+                        )
+                        if timeline_schema_version == "v2"
+                        else [],
+                        "subtitle_track": {"y_norm": 0.9, "max_lines": 2, "style": "default"} if timeline_schema_version == "v2" else {},
                     },
                 )
             )
@@ -292,7 +319,7 @@ class CartoonStoryboardService:
                 "total_duration_ms": total_duration_ms,
                 "scene_count": len(scenes),
                 "speaker_count": len(speaker_ids),
-                "generated_with": "fallback_storyboard_v1",
+                "generated_with": "fallback_storyboard_v2" if timeline_schema_version == "v2" else "fallback_storyboard_v1",
             },
         )
 
@@ -306,6 +333,7 @@ class CartoonStoryboardService:
         scene_count: int,
         language: str,
         use_hinglish_script: bool,
+        timeline_schema_version: str,
     ) -> str:
         characters = []
         for character in character_roster:
@@ -323,6 +351,7 @@ class CartoonStoryboardService:
             f"Scene count: {max(2, min(int(scene_count), 10))}\n"
             f"Language: {_clean(language) or 'en'}\n"
             f"Use Roman Hinglish script: {bool(use_hinglish_script)}\n"
+            f"Timeline schema version: {timeline_schema_version}\n"
             f"Characters: {json.dumps(characters, ensure_ascii=False)}\n\n"
             "Return strict JSON object with this schema:\n"
             "{\n"
@@ -340,6 +369,9 @@ class CartoonStoryboardService:
             '      "mood": "energetic",\n'
             '      "focus_character_id": "ava",\n'
             '      "visual_notes": "notes",\n'
+            '      "camera_track": {"keyframes":[{"t_ms":0,"x":0,"y":0,"zoom":1.0,"rotation":0,"ease":"linear"}]},\n'
+            '      "character_tracks": [{"character_id":"ava","keyframes":[{"t_ms":0,"x_norm":0.28,"y_norm":0.72,"scale":1.0,"rotation":0,"pose":"idle","emotion":"neutral","opacity":1.0,"z_index":1,"ease":"linear"}]}],\n'
+            '      "subtitle_track": {"y_norm":0.9,"max_lines":2,"style":"default"},\n'
             '      "turns": [\n'
             "        {\n"
             '          "speaker_id": "ava",\n'
@@ -353,8 +385,105 @@ class CartoonStoryboardService:
             "  ]\n"
             "}\n"
             "Rules: 2-4 speakers, concise lines, educational but engaging. "
-            "Use camera/transition metadata to create cinematic but readable pacing."
+            "Use camera/transition metadata to create cinematic but readable pacing. "
+            "When timeline schema version is v2, include non-empty camera_track and character_tracks for every scene."
         )
+
+
+def _camera_track_field(value: object) -> dict[str, object]:
+    if isinstance(value, dict):
+        keyframes = value.get("keyframes", [])
+        if isinstance(keyframes, list):
+            normalized_keyframes = [frame for frame in keyframes if isinstance(frame, dict)]
+            return {"keyframes": normalized_keyframes}
+    return {}
+
+
+def _character_tracks_field(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    output: list[dict[str, object]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        keyframes = item.get("keyframes", [])
+        normalized_keyframes = [frame for frame in keyframes if isinstance(frame, dict)] if isinstance(keyframes, list) else []
+        output.append({"character_id": _clean(item.get("character_id")), "keyframes": normalized_keyframes})
+    return output
+
+
+def _subtitle_track_field(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "y_norm": _float_safe(value.get("y_norm"), default=0.9),
+        "max_lines": max(1, _int_safe(value.get("max_lines"), default=2)),
+        "style": _clean(value.get("style")) or "default",
+    }
+
+
+def _default_camera_track(*, scene_duration_ms: int) -> dict[str, object]:
+    safe_duration = max(1000, int(scene_duration_ms))
+    return {
+        "keyframes": [
+            {"t_ms": 0, "x": 0.0, "y": 0.0, "zoom": 1.0, "rotation": 0.0, "ease": "linear"},
+            {"t_ms": safe_duration, "x": 12.0, "y": -2.0, "zoom": 1.04, "rotation": 0.0, "ease": "ease_in_out"},
+        ]
+    }
+
+
+def _default_character_tracks(
+    *,
+    character_roster: list[CartoonCharacterSpec],
+    scene_duration_ms: int,
+) -> list[dict[str, object]]:
+    safe_duration = max(1000, int(scene_duration_ms))
+    roster = [character for character in character_roster if isinstance(character, dict)]
+    if not roster:
+        roster = [{"id": "ava"}, {"id": "noah"}]
+    output: list[dict[str, object]] = []
+    slot_count = max(1, len(roster))
+    for index, character in enumerate(roster):
+        char_id = _clean(character.get("id")) or f"speaker_{index + 1}"
+        x_norm = 0.2 + ((0.6 / max(1, slot_count - 1)) * index) if slot_count > 1 else 0.5
+        output.append(
+            {
+                "character_id": char_id,
+                "keyframes": [
+                    {
+                        "t_ms": 0,
+                        "x_norm": x_norm,
+                        "y_norm": 0.72,
+                        "scale": _float_safe(character.get("default_scale"), default=1.0),
+                        "rotation": 0.0,
+                        "pose": "idle",
+                        "emotion": "neutral",
+                        "opacity": 1.0,
+                        "z_index": _int_safe(character.get("z_layer"), default=index),
+                        "ease": "linear",
+                    },
+                    {
+                        "t_ms": safe_duration,
+                        "x_norm": x_norm,
+                        "y_norm": 0.72,
+                        "scale": _float_safe(character.get("default_scale"), default=1.0),
+                        "rotation": 0.0,
+                        "pose": "idle",
+                        "emotion": "neutral",
+                        "opacity": 1.0,
+                        "z_index": _int_safe(character.get("z_layer"), default=index),
+                        "ease": "ease_in_out",
+                    },
+                ],
+            }
+        )
+    return output
+
+
+def _normalize_timeline_schema_version(value: object) -> str:
+    if _clean(value).lower() == "v2":
+        return "v2"
+    return "v1"
 
 
 def _background_for_short_type(short_type: CartoonShortType) -> str:
@@ -435,5 +564,16 @@ def _int_safe(value: object, *, default: int) -> int:
         if isinstance(value, (int, float, str)):
             return int(value)
         return int(str(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _float_safe(value: object, *, default: float) -> float:
+    try:
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, (int, float, str)):
+            return float(value)
+        return float(str(value))
     except (TypeError, ValueError):
         return default

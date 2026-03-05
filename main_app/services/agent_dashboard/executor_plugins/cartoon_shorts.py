@@ -42,6 +42,8 @@ def _build_executor(context: AssetExecutorPluginContext) -> AssetExecutor:
             language=str(payload.get("language", "en")),
             use_hinglish_script=bool(payload.get("hinglish_script", False)),
             manual_timeline=manual_timeline,
+            timeline_schema_version=str(payload.get("timeline_schema_version", "v1")),
+            quality_tier=str(payload.get("quality_tier", "auto")),
             settings=settings,
         )
         if result.parse_error or not isinstance(result.cartoon_payload, dict):

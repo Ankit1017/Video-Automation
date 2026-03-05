@@ -16,6 +16,9 @@ The `cartoon_shorts` asset is a separate media pipeline integrated with:
 - `cartoon_storyboard_service.py`: idea-to-scene LLM generation with fallback path.
 - `cartoon_timeline_service.py`: validation/normalization of scene and turn timing.
 - `cartoon_character_pack_service.py`: loads local character pack metadata.
+- `cartoon_character_asset_validator.py`: validates strict v2 cache layout and required state coverage.
+- `cartoon_lottie_cache_service.py`: resolves deterministic sprite frame paths from pre-rendered cache.
+- `cartoon_motion_planner_service.py`: frame-by-frame camera/blocking/character state planner with easing.
 - `cartoon_audio_service.py`: builds narration track from timeline turns.
 - `cartoon_export_service.py`: renders MP4 outputs for selected aspect ratio(s).
 - `cartoon_scene_renderer.py`: draws per-scene visual frames.
@@ -34,6 +37,13 @@ Defined in `main_app/contracts.py`:
 - `CartoonRenderProfile`
 - `CartoonOutputArtifact`
 
+v2 additions:
+
+- `timeline_schema_version` (`v1 | v2`)
+- `quality_tier` (`auto | light | balanced | high`)
+- `camera_track`, `character_tracks`, `subtitle_track` on scenes
+- extended `CartoonCharacterSpec` fields for cache-based rendering
+
 ## Orchestration Integration
 
 `cartoon_shorts` is registered in:
@@ -51,4 +61,4 @@ Schema:
 Verification:
 
 - media verification path validates timeline + roster integrity.
-
+- v2 verification additionally validates motion tracks and required character asset references.

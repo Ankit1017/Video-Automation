@@ -27,6 +27,8 @@ _SHORT_TYPES = [
 ]
 _OUTPUT_MODES = ["dual", "shorts_9_16", "widescreen_16_9"]
 _LANGUAGES = ["en", "hi"]
+_TIMELINE_SCHEMA_OPTIONS = ["v2", "v1"]
+_QUALITY_TIERS = ["auto", "light", "balanced", "high"]
 
 
 def render_cartoon_shorts_tab(
@@ -75,6 +77,8 @@ def render_cartoon_shorts_tab(
         st.slider("Scenes", min_value=2, max_value=10, value=4, step=1, key="cartoon_scene_count")
         st.slider("Characters", min_value=2, max_value=4, value=2, step=1, key="cartoon_speaker_count")
         st.selectbox("Output Mode", options=_OUTPUT_MODES, index=0, key="cartoon_output_mode")
+        st.selectbox("Timeline Schema Version", options=_TIMELINE_SCHEMA_OPTIONS, index=0, key="cartoon_timeline_schema_version")
+        st.selectbox("Quality Tier", options=_QUALITY_TIERS, index=0, key="cartoon_quality_tier")
         st.selectbox("Language", options=_LANGUAGES, index=0, key="cartoon_language")
         st.checkbox("Use Hinglish Script", value=False, key="cartoon_hinglish_script")
         st.checkbox("Cinematic Story Mode", value=True, key="cartoon_cinematic_story_mode")
@@ -97,6 +101,8 @@ def render_cartoon_shorts_tab(
         scene_count = int(st.session_state.get("cartoon_scene_count", 4))
         speaker_count = int(st.session_state.get("cartoon_speaker_count", 2))
         output_mode = str(st.session_state.get("cartoon_output_mode", "dual")).strip().lower()
+        timeline_schema_version = str(st.session_state.get("cartoon_timeline_schema_version", "v2")).strip().lower()
+        quality_tier = str(st.session_state.get("cartoon_quality_tier", "auto")).strip().lower()
         language = str(st.session_state.get("cartoon_language", "en")).strip().lower()
         hinglish_script = bool(st.session_state.get("cartoon_hinglish_script", False))
         cinematic_story_mode = bool(st.session_state.get("cartoon_cinematic_story_mode", True))
@@ -120,6 +126,8 @@ def render_cartoon_shorts_tab(
                 language=language,
                 use_hinglish_script=hinglish_script,
                 manual_timeline=manual_timeline,
+                timeline_schema_version=timeline_schema_version,
+                quality_tier=quality_tier,
                 settings=settings,
             )
             context.raise_if_cancelled()
@@ -194,6 +202,8 @@ def render_cartoon_shorts_tab(
                 "scene_count": scene_count,
                 "speaker_count": speaker_count,
                 "output_mode": output_mode,
+                "timeline_schema_version": timeline_schema_version,
+                "quality_tier": quality_tier,
                 "hinglish_script": hinglish_script,
                 "cinematic_story_mode": cinematic_story_mode,
                 "timeline_mode": timeline_mode,
@@ -202,7 +212,14 @@ def render_cartoon_shorts_tab(
         job_id = job_manager.submit(
             label=f"Cartoon Shorts: {topic_clean}",
             worker=_worker,
-            metadata={"asset": "cartoon_shorts", "topic": topic_clean, "short_type": short_type, "output_mode": output_mode},
+            metadata={
+                "asset": "cartoon_shorts",
+                "topic": topic_clean,
+                "short_type": short_type,
+                "output_mode": output_mode,
+                "timeline_schema_version": timeline_schema_version,
+                "quality_tier": quality_tier,
+            },
         )
         st.session_state.cartoon_background_job_id = job_id
         st.session_state.cartoon_background_job_applied_id = ""

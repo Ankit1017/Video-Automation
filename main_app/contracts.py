@@ -61,6 +61,25 @@ CartoonMood: TypeAlias = Literal[
     "inspiring",
 ]
 
+CartoonTimelineSchemaVersion: TypeAlias = Literal[
+    "v1",
+    "v2",
+]
+
+CartoonQualityTier: TypeAlias = Literal[
+    "auto",
+    "light",
+    "balanced",
+    "high",
+]
+
+CartoonEaseType: TypeAlias = Literal[
+    "linear",
+    "ease_in",
+    "ease_out",
+    "ease_in_out",
+]
+
 
 class SlideContent(TypedDict, total=False):
     section: str
@@ -172,6 +191,50 @@ class CartoonCharacterSpec(TypedDict, total=False):
     color_hex: str
     outfit_variant: str
     voice: str
+    asset_mode: str
+    lottie_source: str
+    cache_root: str
+    state_map: dict[str, JSONValue]
+    anchor: dict[str, float]
+    default_scale: float
+    z_layer: int
+
+
+class CartoonCameraKeyframe(TypedDict, total=False):
+    t_ms: int
+    x: float
+    y: float
+    zoom: float
+    rotation: float
+    ease: CartoonEaseType
+
+
+class CartoonCameraTrack(TypedDict, total=False):
+    keyframes: list[CartoonCameraKeyframe]
+
+
+class CartoonCharacterKeyframe(TypedDict, total=False):
+    t_ms: int
+    x_norm: float
+    y_norm: float
+    scale: float
+    rotation: float
+    pose: str
+    emotion: str
+    opacity: float
+    z_index: int
+    ease: CartoonEaseType
+
+
+class CartoonCharacterTrack(TypedDict, total=False):
+    character_id: str
+    keyframes: list[CartoonCharacterKeyframe]
+
+
+class CartoonSubtitleTrack(TypedDict, total=False):
+    y_norm: float
+    max_lines: int
+    style: str
 
 
 class CartoonDialogueTurn(TypedDict, total=False):
@@ -200,6 +263,9 @@ class CartoonScene(TypedDict, total=False):
     duration_ms: int
     turns: list[CartoonDialogueTurn]
     visual_notes: str
+    camera_track: CartoonCameraTrack
+    character_tracks: list[CartoonCharacterTrack]
+    subtitle_track: CartoonSubtitleTrack
 
 
 class CartoonTimeline(TypedDict, total=False):
@@ -244,6 +310,8 @@ class CartoonPayload(TypedDict, total=False):
     output_artifacts: list[CartoonOutputArtifact]
     script_markdown: str
     metadata: dict[str, JSONValue]
+    timeline_schema_version: CartoonTimelineSchemaVersion
+    quality_tier: CartoonQualityTier
 
 
 class AssetSection(TypedDict, total=False):

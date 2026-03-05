@@ -1,6 +1,9 @@
 {
   "pack_name": "Hatched Default Toon Pack",
   "pack_version": "v1",
+  "pack_schema_version": "v2",
+  "cache_fps": 24,
+  "cache_resolution": "1024x1024",
   "license": "Commercial-friendly internal asset pack",
   "characters": [
     {
@@ -9,7 +12,21 @@
       "role": "Guide",
       "color_hex": "#4F8EF7",
       "outfit_variant": "hoodie_blue",
-      "voice": "female_1"
+      "voice": "female_1",
+      "asset_mode": "lottie_cache",
+      "lottie_source": "characters/ava/lottie/main.json",
+      "cache_root": "characters/ava/cache",
+      "state_map": {
+        "idle": "idle",
+        "talk": "talk",
+        "blink": "blink"
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1.0
+      },
+      "default_scale": 1.0,
+      "z_layer": 1
     },
     {
       "id": "noah",
@@ -17,7 +34,21 @@
       "role": "Engineer",
       "color_hex": "#5BC0A8",
       "outfit_variant": "shirt_green",
-      "voice": "male_1"
+      "voice": "male_1",
+      "asset_mode": "lottie_cache",
+      "lottie_source": "characters/noah/lottie/main.json",
+      "cache_root": "characters/noah/cache",
+      "state_map": {
+        "idle": "idle",
+        "talk": "talk",
+        "blink": "blink"
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1.0
+      },
+      "default_scale": 1.0,
+      "z_layer": 2
     },
     {
       "id": "mia",
@@ -25,7 +56,21 @@
       "role": "Reviewer",
       "color_hex": "#F39C6B",
       "outfit_variant": "jacket_orange",
-      "voice": "female_2"
+      "voice": "female_2",
+      "asset_mode": "lottie_cache",
+      "lottie_source": "characters/mia/lottie/main.json",
+      "cache_root": "characters/mia/cache",
+      "state_map": {
+        "idle": "idle",
+        "talk": "talk",
+        "blink": "blink"
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1.0
+      },
+      "default_scale": 1.0,
+      "z_layer": 3
     },
     {
       "id": "liam",
@@ -33,7 +78,21 @@
       "role": "Examples Specialist",
       "color_hex": "#BA8CFF",
       "outfit_variant": "shirt_purple",
-      "voice": "male_2"
+      "voice": "male_2",
+      "asset_mode": "lottie_cache",
+      "lottie_source": "characters/liam/lottie/main.json",
+      "cache_root": "characters/liam/cache",
+      "state_map": {
+        "idle": "idle",
+        "talk": "talk",
+        "blink": "blink"
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1.0
+      },
+      "default_scale": 1.0,
+      "z_layer": 4
     }
   ],
   "background_keys": [

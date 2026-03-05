@@ -262,6 +262,9 @@ def _verify_media_asset(*, result: AgentAssetResult, tool: AgentToolDefinition) 
         else:
             checks_run.append("cartoon_timeline_present")
             timeline = payload.get("timeline", {}) if isinstance(payload, dict) else {}
+            metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+            metadata_map = metadata if isinstance(metadata, dict) else {}
+            timeline_schema_version = _clean_text(payload.get("timeline_schema_version") or metadata_map.get("timeline_schema_version") or "v1").lower()
             if not isinstance(timeline, dict):
                 issues.append(_issue("Cartoon timeline must be an object.", f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.timeline"))
             else:
@@ -309,6 +312,12 @@ def _verify_media_asset(*, result: AgentAssetResult, tool: AgentToolDefinition) 
                                 issues=issues,
                                 path_prefix=f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.timeline.scenes[{idx}].turns",
                             )
+                        if timeline_schema_version == "v2":
+                            _validate_cartoon_v2_scene(
+                                scene=scene,
+                                issues=issues,
+                                path_prefix=f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.timeline.scenes[{idx}]",
+                            )
             checks_run.append("cartoon_roster_present")
             character_roster = payload.get("character_roster", []) if isinstance(payload, dict) else []
             if not isinstance(character_roster, list) or len(character_roster) < 2:
@@ -318,6 +327,22 @@ def _verify_media_asset(*, result: AgentAssetResult, tool: AgentToolDefinition) 
                         f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.character_roster",
                     )
                 )
+            elif timeline_schema_version == "v2":
+                checks_run.append("cartoon_v2_character_assets")
+                for index, character in enumerate(character_roster):
+                    if not isinstance(character, dict):
+                        issues.append(
+                            _issue(
+                                "Each cartoon character must be an object.",
+                                f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.character_roster[{index}]",
+                            )
+                        )
+                        continue
+                    _validate_cartoon_v2_character_assets(
+                        character=character,
+                        issues=issues,
+                        path_prefix=f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.character_roster[{index}]",
+                    )
         checks_run.append("cartoon_outputs_artifact_optional")
         _ = _section_data(result=result, key=ARTIFACT_CARTOON_OUTPUTS)
 
@@ -417,6 +442,77 @@ def _validate_video_timeline_segments(*, segments: list[object], issues: list[Ve
         if previous_start > start_ms:
             issues.append(_issue("Audio segments must be monotonic by start_ms.", path))
         previous_start = start_ms
+
+
+def _validate_cartoon_v2_scene(*, scene: dict[str, Any], issues: list[VerificationIssue], path_prefix: str) -> None:
+    camera_track = scene.get("camera_track", {})
+    if not isinstance(camera_track, dict):
+        issues.append(_issue("cartoon v2 scene.camera_track must be an object.", f"{path_prefix}.camera_track"))
+    else:
+        camera_keyframes = camera_track.get("keyframes", [])
+        if not isinstance(camera_keyframes, list) or not camera_keyframes:
+            issues.append(_issue("cartoon v2 scene.camera_track.keyframes must be non-empty.", f"{path_prefix}.camera_track.keyframes"))
+        else:
+            _validate_monotonic_keyframes(
+                keyframes=camera_keyframes,
+                issues=issues,
+                path_prefix=f"{path_prefix}.camera_track.keyframes",
+            )
+
+    character_tracks = scene.get("character_tracks", [])
+    if not isinstance(character_tracks, list) or not character_tracks:
+        issues.append(_issue("cartoon v2 scene.character_tracks must be non-empty.", f"{path_prefix}.character_tracks"))
+        return
+    for index, track in enumerate(character_tracks):
+        track_path = f"{path_prefix}.character_tracks[{index}]"
+        if not isinstance(track, dict):
+            issues.append(_issue("cartoon v2 character_track must be an object.", track_path))
+            continue
+        character_id = _clean_text(track.get("character_id"))
+        if not character_id:
+            issues.append(_issue("cartoon v2 character_track.character_id is required.", f"{track_path}.character_id"))
+        keyframes = track.get("keyframes", [])
+        if not isinstance(keyframes, list) or not keyframes:
+            issues.append(_issue("cartoon v2 character_track.keyframes must be non-empty.", f"{track_path}.keyframes"))
+            continue
+        _validate_monotonic_keyframes(keyframes=keyframes, issues=issues, path_prefix=f"{track_path}.keyframes")
+
+
+def _validate_monotonic_keyframes(*, keyframes: list[object], issues: list[VerificationIssue], path_prefix: str) -> None:
+    previous_t = -1
+    for index, keyframe in enumerate(keyframes):
+        keyframe_path = f"{path_prefix}[{index}]"
+        if not isinstance(keyframe, dict):
+            issues.append(_issue("Keyframe must be an object.", keyframe_path))
+            continue
+        t_ms = _safe_int(keyframe.get("t_ms"), default=-1)
+        if t_ms < 0:
+            issues.append(_issue("Keyframe t_ms must be >= 0.", f"{keyframe_path}.t_ms"))
+            continue
+        if previous_t > t_ms:
+            issues.append(_issue("Keyframes must be monotonic by t_ms.", keyframe_path))
+        previous_t = t_ms
+
+
+def _validate_cartoon_v2_character_assets(
+    *,
+    character: dict[str, Any],
+    issues: list[VerificationIssue],
+    path_prefix: str,
+) -> None:
+    if _clean_text(character.get("asset_mode")).lower() != "lottie_cache":
+        issues.append(_issue("cartoon v2 character asset_mode must be `lottie_cache`.", f"{path_prefix}.asset_mode"))
+    if not _clean_text(character.get("lottie_source")):
+        issues.append(_issue("cartoon v2 character lottie_source is required.", f"{path_prefix}.lottie_source"))
+    if not _clean_text(character.get("cache_root")):
+        issues.append(_issue("cartoon v2 character cache_root is required.", f"{path_prefix}.cache_root"))
+    state_map = character.get("state_map", {})
+    if not isinstance(state_map, dict) or not state_map:
+        issues.append(_issue("cartoon v2 character state_map must be a non-empty object.", f"{path_prefix}.state_map"))
+
+
+def _clean_text(value: object) -> str:
+    return " ".join(str(value or "").split()).strip()
 
 
 def _safe_int(value: object, *, default: int) -> int:

@@ -6,11 +6,14 @@ from main_app.contracts import (
     CartoonCharacterSpec,
     CartoonOutputMode,
     CartoonPayload,
+    CartoonQualityTier,
     CartoonShortType,
+    CartoonTimelineSchemaVersion,
     CartoonTimeline,
 )
 from main_app.models import CartoonShortsGenerationResult, GroqSettings
 from main_app.services.asset_history_service import AssetHistoryService
+from main_app.services.cartoon_character_asset_validator import CartoonCharacterAssetValidator
 from main_app.services.cartoon_character_pack_service import CartoonCharacterPackService
 from main_app.services.cartoon_storyboard_service import CartoonStoryboardService, SHORT_TYPE_OPTIONS
 from main_app.services.cartoon_timeline_service import CartoonTimelineService
@@ -42,12 +45,16 @@ class CartoonShortsAssetService:
         language: str,
         use_hinglish_script: bool,
         manual_timeline: CartoonTimeline | None = None,
+        timeline_schema_version: str = "v1",
+        quality_tier: str = "auto",
         settings: GroqSettings,
     ) -> CartoonShortsGenerationResult:
         topic_clean = _clean(topic)
         idea_clean = _clean(idea)
         short_type_clean = _normalize_short_type(short_type)
         output_mode_clean = _normalize_output_mode(output_mode)
+        timeline_schema_version_clean = _normalize_timeline_schema_version(timeline_schema_version)
+        quality_tier_clean = _normalize_quality_tier(quality_tier)
         notes: list[str] = []
 
         character_roster = self._character_pack_service.load_roster(speaker_count=speaker_count)
@@ -57,7 +64,11 @@ class CartoonShortsAssetService:
         parse_error = None
 
         if manual_timeline is not None:
-            timeline, normalize_notes = self._timeline_service.normalize_timeline(timeline=manual_timeline)
+            timeline, normalize_notes = self._timeline_service.normalize_timeline(
+                timeline=manual_timeline,
+                timeline_schema_version=timeline_schema_version_clean,
+                character_roster=character_roster,
+            )
             notes.extend(normalize_notes)
             notes.append("Timeline source: manual_editor")
         else:
@@ -70,6 +81,7 @@ class CartoonShortsAssetService:
                 settings=settings,
                 language=language,
                 use_hinglish_script=use_hinglish_script,
+                timeline_schema_version=timeline_schema_version_clean,
             )
             cache_hits += stage_cache_hits
             total_calls += stage_calls
@@ -77,12 +89,30 @@ class CartoonShortsAssetService:
             notes.extend(stage_notes)
             if stage_error:
                 parse_error = stage_error
-            timeline, normalize_notes = self._timeline_service.normalize_timeline(timeline=generated_timeline)
+            timeline, normalize_notes = self._timeline_service.normalize_timeline(
+                timeline=generated_timeline,
+                timeline_schema_version=timeline_schema_version_clean,
+                character_roster=character_roster,
+            )
             notes.extend(normalize_notes)
             notes.append("Timeline source: generated_storyboard")
 
         if not isinstance(timeline.get("scenes", []), list) or not timeline.get("scenes", []):
             parse_error = parse_error or "Cartoon timeline has no scenes."
+
+        if timeline_schema_version_clean == "v2":
+            validator = CartoonCharacterAssetValidator(pack_root=self._character_pack_service.pack_root_path())
+            asset_errors = validator.validate_roster(
+                roster=character_roster,
+                require_lottie_cache=True,
+                timeline_schema_version=timeline_schema_version_clean,
+            )
+            if asset_errors:
+                parse_error = parse_error or f"Character asset validation failed ({len(asset_errors)} issues)."
+                notes.extend(asset_errors[:60])
+            notes.append("Timeline schema version: v2")
+        else:
+            notes.append("Timeline schema version: v1")
 
         script_markdown = self._script_markdown(
             topic=topic_clean,
@@ -103,11 +133,15 @@ class CartoonShortsAssetService:
                 "timeline": timeline,
                 "output_artifacts": [],
                 "script_markdown": script_markdown,
+                "timeline_schema_version": timeline_schema_version_clean,
+                "quality_tier": quality_tier_clean,
                 "metadata": {
                     "idea": idea_clean,
                     "scene_count_requested": max(2, min(int(scene_count), 10)),
                     "speaker_count_requested": max(2, min(int(speaker_count), 4)),
                     "pack": self._character_pack_service.pack_metadata(),
+                    "timeline_schema_version": timeline_schema_version_clean,
+                    "quality_tier": quality_tier_clean,
                 },
             },
         )
@@ -129,6 +163,8 @@ class CartoonShortsAssetService:
             speaker_count=speaker_count,
             language=language,
             use_hinglish_script=use_hinglish_script,
+            timeline_schema_version=timeline_schema_version_clean,
+            quality_tier=quality_tier_clean,
             result=result,
             model=settings.normalized_model,
         )
@@ -145,6 +181,8 @@ class CartoonShortsAssetService:
         speaker_count: int,
         language: str,
         use_hinglish_script: bool,
+        timeline_schema_version: CartoonTimelineSchemaVersion,
+        quality_tier: CartoonQualityTier,
         result: CartoonShortsGenerationResult,
         model: str,
     ) -> None:
@@ -165,6 +203,8 @@ class CartoonShortsAssetService:
                 "speaker_count": max(2, min(int(speaker_count), 4)),
                 "language": _clean(language) or "en",
                 "hinglish_script": bool(use_hinglish_script),
+                "timeline_schema_version": timeline_schema_version,
+                "quality_tier": quality_tier,
             },
             result_payload=payload,
             status="error" if result.parse_error else "success",
@@ -227,6 +267,20 @@ def _normalize_output_mode(value: str) -> CartoonOutputMode:
     if raw in {"dual", "shorts_9_16", "widescreen_16_9"}:
         return cast(CartoonOutputMode, raw)
     return "dual"
+
+
+def _normalize_timeline_schema_version(value: str) -> CartoonTimelineSchemaVersion:
+    raw = _clean(value).lower()
+    if raw == "v2":
+        return cast(CartoonTimelineSchemaVersion, "v2")
+    return cast(CartoonTimelineSchemaVersion, "v1")
+
+
+def _normalize_quality_tier(value: str) -> CartoonQualityTier:
+    raw = _clean(value).lower()
+    if raw in {"auto", "light", "balanced", "high"}:
+        return cast(CartoonQualityTier, raw)
+    return cast(CartoonQualityTier, "auto")
 
 
 def _int_safe(value: object, *, default: int) -> int:

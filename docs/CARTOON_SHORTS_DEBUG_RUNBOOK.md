@@ -22,6 +22,10 @@ For cartoon jobs, start with `job_id` from background job panel.
 - `cartoon.render.format.end`
 - `cartoon.render.end`
 - `cartoon.export.error`
+- `cartoon.pack.validate.start`
+- `cartoon.pack.validate.end`
+- `cartoon.timeline.v2.scene`
+- `cartoon.render.quality_tier`
 
 ## Common Failures
 
@@ -58,3 +62,20 @@ Checks:
 2. Ensure turns use matching `speaker_id`.
 3. Confirm default character pack manifest is readable.
 
+## 5) v2 render fails before frame export
+
+Checks:
+
+1. Confirm `timeline_schema_version` is `v2`.
+2. Verify every scene has `camera_track.keyframes` and `character_tracks`.
+3. Verify each character has `asset_mode=lottie_cache`, `lottie_source`, and `cache_root`.
+4. Confirm cache layout exists:
+   `characters/<char_id>/cache/<state>/<variant>/f####.png`.
+
+## 6) Cache miss spikes or frozen sprite motion
+
+Checks:
+
+1. Inspect `cartoon.sprite.cache_miss_total`.
+2. Verify `talk` variants include visemes `A..H,X`.
+3. Confirm render `quality_tier` and selected fps match expected cache cadence.
