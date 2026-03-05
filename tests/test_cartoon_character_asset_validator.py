@@ -51,6 +51,26 @@ class TestCartoonCharacterAssetValidator(unittest.TestCase):
             )
             self.assertTrue(any("neutral_X" in err for err in errors))
 
+    def test_motion_quality_audit_warns_for_single_frame_variants(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="cartoon_pack_") as temp_dir:
+            pack_root = Path(temp_dir)
+            cache_root = pack_root / "characters" / "ava" / "cache"
+            self._build_complete_cache(cache_root)
+            validator = CartoonCharacterAssetValidator(pack_root=pack_root)
+            warnings = validator.audit_roster_motion_quality(
+                roster=[
+                    {
+                        "id": "ava",
+                        "asset_mode": "lottie_cache",
+                        "lottie_source": "characters/ava/lottie/main.json",
+                        "cache_root": "characters/ava/cache",
+                    }
+                ],
+                timeline_schema_version="v2",
+                recommended_min_frames_per_variant=4,
+            )
+            self.assertTrue(any("low-motion variant" in warning for warning in warnings))
+
     @staticmethod
     def _build_complete_cache(cache_root: Path) -> None:
         emotions = ("neutral", "energetic", "tense", "warm", "inspiring")

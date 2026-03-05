@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any, cast
 
 from main_app.contracts import CartoonCharacterSpec, CartoonDialogueTurn, CartoonScene
@@ -484,20 +485,43 @@ class CartoonSceneRenderer:
                         emotion=emotion,
                         viseme=viseme,
                         t_ms=t_ms,
-                        fps=max(12, _int_safe(frame_plan.get("fps"), default=24)),
+                        cache_fps=max(
+                            1,
+                            _int_safe(
+                                frame_plan.get("cache_fps"),
+                                default=max(12, _int_safe(frame_plan.get("fps"), default=24)),
+                            ),
+                        ),
                     )
                     sprite = image_module.open(frame_path).convert("RGBA")
                     target_h = max(48, int(height * (0.62 if showcase_mode else 0.3) * scale))
                     ratio = max(0.1, float(sprite.size[0]) / float(max(sprite.size[1], 1)))
                     target_w = max(36, int(target_h * ratio))
+                    motion = _sprite_motion_offsets(
+                        t_ms=t_ms,
+                        char_id=char_id,
+                        state=state,
+                        is_active=is_active,
+                        showcase_mode=showcase_mode,
+                    )
+                    target_w = max(24, int(round(target_w * motion["scale_x"])))
+                    target_h = max(24, int(round(target_h * motion["scale_y"])))
                     sprite = sprite.resize((target_w, target_h))
-                    left = int(center_x - (target_w * anchor_x))
-                    top = int(center_y - (target_h * anchor_y))
+                    rotate_deg = motion["rotation_deg"]
+                    if abs(rotate_deg) >= 0.05:
+                        sprite = sprite.rotate(
+                            rotate_deg,
+                            resample=getattr(image_module, "BICUBIC", 3),
+                            expand=True,
+                        )
+                    sprite_w, sprite_h = sprite.size
+                    left = int(center_x - (sprite_w * anchor_x) + motion["x_px"])
+                    top = int(center_y - (sprite_h * anchor_y) + motion["y_px"])
                     image.paste(sprite, (left, top), sprite)
                     sprite_drawn = True
                     if is_active and not showcase_mode:
                         drawer.rounded_rectangle(
-                            (left - 6, top - 6, left + target_w + 6, top + target_h + 6),
+                            (left - 6, top - 6, left + sprite_w + 6, top + sprite_h + 6),
                             radius=12,
                             outline=(236, 244, 255),
                             width=3,
@@ -505,7 +529,7 @@ class CartoonSceneRenderer:
                     if not showcase_mode:
                         bbox = drawer.textbbox((0, 0), name, font=name_font)
                         text_w = max(0, bbox[2] - bbox[0])
-                        drawer.text((center_x - text_w // 2, top + target_h + 8), name, fill=(242, 246, 255), font=name_font)
+                        drawer.text((center_x - text_w // 2, top + sprite_h + 8), name, fill=(242, 246, 255), font=name_font)
                 except (AttributeError, OSError, RuntimeError, TypeError, ValueError, FileNotFoundError):
                     sprite_drawn = False
 
@@ -728,6 +752,58 @@ def _showcase_subject(planned: list[dict[str, object]]) -> dict[str, object]:
         if bool(item.get("is_active", False)):
             return item
     return planned[0] if planned else {}
+
+
+def _sprite_motion_offsets(
+    *,
+    t_ms: int,
+    char_id: str,
+    state: str,
+    is_active: bool,
+    showcase_mode: bool,
+) -> dict[str, float]:
+    seed = sum(ord(ch) for ch in _clean(char_id)) % 997
+    now = max(0, int(t_ms))
+    base = (now + (seed * 17)) / 1000.0
+    pulse = math.sin(base * (2.0 * math.pi))
+    slow = math.sin(base * (2.0 * math.pi) * 0.45)
+    scale_x = 1.0
+    scale_y = 1.0
+    x_px = 0.0
+    y_px = -2.0 * slow
+    rotation_deg = 0.0
+
+    state_key = _clean(state).lower()
+    if state_key == "talk":
+        mouth_cycle = abs(math.sin(base * (2.0 * math.pi) * 2.4))
+        scale_x *= 1.0 + (0.03 * mouth_cycle)
+        scale_y *= 1.0 - (0.045 * mouth_cycle)
+        y_px += 1.8 * pulse
+        rotation_deg += 0.8 * pulse
+    elif state_key == "blink":
+        scale_y *= 0.96
+        y_px += 1.5
+    else:
+        # Idle "breathing" to avoid frozen look when cache variants have low frame count.
+        scale_x *= 1.0 - (0.012 * slow)
+        scale_y *= 1.0 + (0.02 * slow)
+
+    if is_active:
+        rotation_deg += 0.7 * slow
+        y_px += 1.0 * pulse
+    if showcase_mode:
+        scale_x *= 1.02
+        scale_y *= 1.02
+        y_px += 2.5 * pulse
+        rotation_deg += 0.5 * slow
+
+    return {
+        "scale_x": max(0.84, min(scale_x, 1.18)),
+        "scale_y": max(0.84, min(scale_y, 1.18)),
+        "x_px": max(-6.0, min(x_px, 6.0)),
+        "y_px": max(-10.0, min(y_px, 10.0)),
+        "rotation_deg": max(-3.0, min(rotation_deg, 3.0)),
+    }
 
 
 def _clean(value: object) -> str:

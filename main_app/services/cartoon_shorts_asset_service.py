@@ -68,6 +68,7 @@ class CartoonShortsAssetService:
         total_calls = 0
         debug_raw = None
         parse_error = None
+        motion_warnings: list[str] = []
 
         if manual_timeline is not None:
             timeline, normalize_notes = self._timeline_service.normalize_timeline(
@@ -116,6 +117,11 @@ class CartoonShortsAssetService:
             if asset_errors:
                 parse_error = parse_error or f"Character asset validation failed ({len(asset_errors)} issues)."
                 notes.extend(asset_errors[:60])
+            motion_warnings = validator.audit_roster_motion_quality(
+                roster=character_roster,
+                timeline_schema_version=timeline_schema_version_clean,
+            )
+            notes.extend(motion_warnings[:60])
             notes.append("Timeline schema version: v2")
         else:
             notes.append("Timeline schema version: v1")
@@ -152,6 +158,7 @@ class CartoonShortsAssetService:
                     "quality_tier": quality_tier_clean,
                     "render_style": render_style_clean,
                     "background_style": background_style_clean,
+                    "pack_motion_warning_count": len(motion_warnings),
                 },
             },
         )

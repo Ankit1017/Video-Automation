@@ -29,7 +29,7 @@ class CartoonLottieCacheService:
         emotion: str,
         viseme: str,
         t_ms: int,
-        fps: int,
+        cache_fps: int,
     ) -> Path:
         cache_root = _clean(character.get("cache_root"))
         if not cache_root:
@@ -39,7 +39,7 @@ class CartoonLottieCacheService:
 
         variants = self._variant_chain(state=state, emotion=emotion, viseme=viseme)
         for variant in variants:
-            frame = self._pick_frame(cache_root=cache_root_path, state=state, variant=variant, t_ms=t_ms, fps=fps)
+            frame = self._pick_frame(cache_root=cache_root_path, state=state, variant=variant, t_ms=t_ms, cache_fps=cache_fps)
             if frame is not None:
                 return frame
         self._cache_miss_count += 1
@@ -54,7 +54,7 @@ class CartoonLottieCacheService:
         state: CartoonSpriteState,
         variant: str,
         t_ms: int,
-        fps: int,
+        cache_fps: int,
     ) -> Path | None:
         folder = cache_root / state / variant
         if not folder.exists():
@@ -62,7 +62,7 @@ class CartoonLottieCacheService:
         frames = sorted(folder.glob("f*.png"))
         if not frames:
             return None
-        safe_fps = max(1, int(fps))
+        safe_fps = max(1, int(cache_fps))
         frame_idx = int(max(0, int(t_ms)) * safe_fps / 1000.0) % len(frames)
         return frames[frame_idx]
 

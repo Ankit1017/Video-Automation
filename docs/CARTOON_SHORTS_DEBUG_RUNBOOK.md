@@ -79,6 +79,8 @@ Checks:
 1. Inspect `cartoon.sprite.cache_miss_total`.
 2. Verify `talk` variants include visemes `A..H,X`.
 3. Confirm render `quality_tier` and selected fps match expected cache cadence.
+4. Inspect `pack_motion_warning_count` in payload metadata; non-zero means low frame count variants.
+5. Ensure pack `cache_fps` matches actual cache export cadence.
 
 ## 7) Output style does not match single-character showcase target
 

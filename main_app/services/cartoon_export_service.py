@@ -126,6 +126,7 @@ class CartoonExportService:
             audio_path = render_root / "cartoon_audio.mp3"
             metadata = cartoon_payload.get("metadata", {})
             metadata_map = metadata if isinstance(metadata, dict) else {}
+            pack_cache_fps = _pack_cache_fps_from_payload(cartoon_payload)
             timed_segments = _metadata_audio_segments(metadata_map.get("audio_segments"))
             audio_b64 = metadata_map.get("audio_b64")
             if isinstance(audio_b64, str):
@@ -170,6 +171,16 @@ class CartoonExportService:
                             )
                         )
                     return {}, f"Cartoon pack validation failed: {validation_errors[0]}"
+                motion_warnings = validator.audit_roster_motion_quality(
+                    roster=cast(list[CartoonCharacterSpec], cartoon_payload.get("character_roster", [])),
+                    timeline_schema_version=timeline_schema_version,
+                )
+                if self._telemetry_service is not None:
+                    self._telemetry_service.record_metric(
+                        name="cartoon_pack_motion_warnings_total",
+                        value=float(len(motion_warnings)),
+                        attrs={"timeline_schema_version": timeline_schema_version},
+                    )
                 if self._telemetry_service is not None:
                     self._telemetry_service.record_event(
                         ObservabilityEvent(
@@ -177,7 +188,7 @@ class CartoonExportService:
                             component="export.cartoon",
                             status="ok",
                             timestamp=_now_iso(),
-                            attributes={"errors": 0},
+                            attributes={"errors": 0, "motion_warnings": len(motion_warnings)},
                         )
                     )
 
@@ -260,6 +271,7 @@ class CartoonExportService:
                                 )
                                 if isinstance(frame_plan, dict):
                                     frame_plan["fps"] = target.fps
+                                    frame_plan["cache_fps"] = pack_cache_fps
                                 if self._telemetry_service is not None:
                                     self._telemetry_service.record_metric(
                                         name="cartoon.motion.plan.frames_total",
@@ -579,6 +591,15 @@ def _pack_root_from_payload(payload: CartoonPayload) -> Path:
         if pack_root:
             return Path(pack_root)
     return Path(__file__).resolve().parents[1] / "assets" / "cartoon_packs" / "default"
+
+
+def _pack_cache_fps_from_payload(payload: CartoonPayload) -> int:
+    metadata = payload.get("metadata", {})
+    metadata_map = metadata if isinstance(metadata, dict) else {}
+    pack = metadata_map.get("pack")
+    if isinstance(pack, dict):
+        return max(1, _int_safe(pack.get("cache_fps"), default=24))
+    return 24
 
 
 def _timeline_scenes(payload: CartoonPayload) -> list[CartoonScene]:

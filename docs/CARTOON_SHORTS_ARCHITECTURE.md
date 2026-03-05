@@ -17,6 +17,7 @@ The `cartoon_shorts` asset is a separate media pipeline integrated with:
 - `cartoon_timeline_service.py`: validation/normalization of scene and turn timing.
 - `cartoon_character_pack_service.py`: loads local character pack metadata.
 - `cartoon_character_asset_validator.py`: validates strict v2 cache layout and required state coverage.
+  - Also audits motion quality (low frame-count variants) for operator feedback.
 - `cartoon_lottie_cache_service.py`: resolves deterministic sprite frame paths from pre-rendered cache.
 - `cartoon_motion_planner_service.py`: frame-by-frame camera/blocking/character state planner with easing.
 - `cartoon_audio_service.py`: builds narration track from timeline turns.

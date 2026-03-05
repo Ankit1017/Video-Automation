@@ -98,6 +98,18 @@ Required state coverage:
 - Emotions: `neutral`, `energetic`, `tense`, `warm`, `inspiring`
 - Talk visemes: `A,B,C,D,E,F,G,H,X`
 
+Motion quality recommendation:
+
+- Keep at least `8+` frames per variant (idle/blink/talk viseme variants).
+- Set pack `cache_fps` in manifest to the real frame cadence used during cache export.
+- The renderer now uses `cache_fps` for deterministic frame selection (independent from MP4 output fps).
+
+Quick demo cache generation (for testing pipeline motion):
+
+```bash
+python scripts/generate_cartoon_motion_cache.py --pack-root main_app/assets/cartoon_packs/default --frames 8 --overwrite
+```
+
 ## Tips
 
 - Keep turns concise for better pacing.
