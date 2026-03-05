@@ -110,6 +110,14 @@ class CartoonMotionPlannerService:
                 state = "idle"
                 viseme = "X"
 
+            pose = _resolved_pose(
+                raw_pose=pose,
+                state=state,
+                emotion=emotion,
+                is_active=is_active,
+                time_ms=time_ms,
+            )
+
             planned.append(
                 {
                     "character_id": char_id,
@@ -204,6 +212,36 @@ def _legacy_camera_transform(*, camera_move: str, progress: float) -> tuple[floa
     if move == "pan_right":
         return 24.0 * progress, 0.0, 1.0
     return 0.0, 0.0, 1.0
+
+
+def _resolved_pose(
+    *,
+    raw_pose: str,
+    state: str,
+    emotion: str,
+    is_active: bool,
+    time_ms: int,
+) -> str:
+    pose = _clean(raw_pose).lower()
+    if pose and pose != "idle":
+        return pose
+    state_key = _clean(state).lower()
+    if state_key != "talk" or not is_active:
+        return "idle"
+    return _auto_talk_pose(time_ms=time_ms, emotion=emotion)
+
+
+def _auto_talk_pose(*, time_ms: int, emotion: str) -> str:
+    mood = _clean(emotion).lower() or "neutral"
+    cycle = {
+        "neutral": ("open", "idle", "point_right", "idle"),
+        "energetic": ("open", "point_right", "emphasis", "open"),
+        "tense": ("point_right", "emphasis", "idle", "point_left"),
+        "warm": ("open", "hand_over_heart", "open", "idle"),
+        "inspiring": ("open", "raise_both", "open", "hand_over_heart"),
+    }.get(mood, ("open", "idle", "point_right", "idle"))
+    slot = max(0, int(time_ms)) // 700
+    return cycle[slot % len(cycle)]
 
 
 def _clean(value: object) -> str:

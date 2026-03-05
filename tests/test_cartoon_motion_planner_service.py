@@ -67,6 +67,7 @@ class TestCartoonMotionPlannerService(unittest.TestCase):
         self.assertAlmostEqual(float(first.get("x_norm", 0.0)), 0.4, delta=0.05)
         self.assertEqual(first.get("state"), "talk")
         self.assertEqual(first.get("viseme"), "A")
+        self.assertNotEqual(str(first.get("pose", "idle")), "idle")
 
     def test_blink_precedence_over_talk(self) -> None:
         plan = self.service.plan_frame(

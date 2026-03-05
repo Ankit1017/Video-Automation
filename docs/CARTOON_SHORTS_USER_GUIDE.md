@@ -122,6 +122,7 @@ python scripts/generate_cartoon_motion_cache.py --pack-root main_app/assets/cart
   - `Render Style = character_showcase`
   - `Background Style = chroma_green` (or `auto` with showcase)
   - `Showcase Avatar Mode = auto` (or `procedural_presenter` while sprite pack is not production-ready)
+  - v2 planner now auto-generates presenter gesture poses during active speech (`open`, `point`, `emphasis`, etc.).
 - For high-quality exports, use:
   - `Fidelity Preset = hd_1080p30` (fast) or `uhd_4k30` (best quality, heavier render)
 - If manual JSON is rejected, validate `scenes[]` and `turns[]` first.

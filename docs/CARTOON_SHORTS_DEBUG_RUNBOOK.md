@@ -92,3 +92,4 @@ Checks:
 3. Verify payload metadata contains both keys on export-start path.
 4. Confirm character cache variants contain multiple frames; single-frame variants will look static.
 5. If sprite pack is placeholder-quality, set `showcase_avatar_mode=procedural_presenter` (or keep `auto` and ensure motion warnings are detected).
+6. If presenter arms look static, verify scene `character_tracks` are present and v2 planner is active (talk-pose choreography depends on active speaker timing).

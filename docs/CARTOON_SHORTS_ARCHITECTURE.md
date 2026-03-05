@@ -20,6 +20,7 @@ The `cartoon_shorts` asset is a separate media pipeline integrated with:
   - Also audits motion quality (low frame-count variants) for operator feedback.
 - `cartoon_lottie_cache_service.py`: resolves deterministic sprite frame paths from pre-rendered cache.
 - `cartoon_motion_planner_service.py`: frame-by-frame camera/blocking/character state planner with easing.
+  - Includes auto talk-pose choreography for showcase presenter mode when pose is not explicitly keyed.
 - `cartoon_audio_service.py`: builds narration track from timeline turns.
 - `cartoon_export_service.py`: renders MP4 outputs for selected aspect ratio(s).
 - `cartoon_scene_renderer.py`: draws per-scene visual frames.

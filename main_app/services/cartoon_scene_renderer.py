@@ -462,6 +462,7 @@ class CartoonSceneRenderer:
                 scale = max(0.9, scale * 1.48)
             state = _clean(planned_character.get("state")).lower() or "idle"
             emotion = _clean(planned_character.get("emotion")).lower() or "neutral"
+            pose = _clean(planned_character.get("pose")).lower() or "idle"
             viseme = _clean(planned_character.get("viseme")).upper() or "X"
             is_active = bool(planned_character.get("is_active", False))
             t_ms = _int_safe(planned_character.get("t_ms"), default=0)
@@ -553,9 +554,11 @@ class CartoonSceneRenderer:
                     scale=scale,
                     character=character,
                     state=state,
+                    pose=pose,
                     viseme=viseme,
                     emotion=emotion,
                     t_ms=t_ms,
+                    is_active=is_active,
                 )
                 continue
 
@@ -623,9 +626,11 @@ class CartoonSceneRenderer:
         scale: float,
         character: CartoonCharacterSpec,
         state: str,
+        pose: str,
         viseme: str,
         emotion: str,
         t_ms: int,
+        is_active: bool,
     ) -> None:
         _ = width
         base_rgb = _hex_to_rgb(_clean(character.get("color_hex"))) or (95, 140, 210)
@@ -644,6 +649,8 @@ class CartoonSceneRenderer:
         phase = (max(0, int(t_ms)) % 1600) / 1600.0
         breath = math.sin(phase * math.pi * 2.0)
         bob = int(round(3.0 * breath))
+        talk_state = _clean(state).lower() == "talk"
+        pose_key = _clean(pose).lower() or ("open" if talk_state else "idle")
 
         # Legs
         leg_w = max(12, int(body_w * 0.28))
@@ -673,20 +680,23 @@ class CartoonSceneRenderer:
             width=3,
         )
 
-        # Arms (presenter gesture on talk)
+        # Arms with pose choreography
         shoulder_y = torso_top + int((torso_bottom - torso_top) * 0.2) + bob
         arm_len = int(body_h * 0.22)
-        left_hand_y = shoulder_y + int(arm_len * 0.9)
+        left_x, left_y, right_x, right_y = _presenter_arm_targets(
+            pose=pose_key,
+            arm_len=arm_len,
+            talk_state=talk_state,
+            t_ms=t_ms,
+            is_active=is_active,
+        )
         drawer.line(
-            (torso_left + 6, shoulder_y, torso_left - int(body_w * 0.23), left_hand_y),
+            (torso_left + 6, shoulder_y, torso_left + left_x, shoulder_y + left_y),
             fill=shirt_rgb,
             width=max(9, int(body_w * 0.13)),
         )
-        talk_state = _clean(state).lower() == "talk"
-        gesture = math.sin((max(0, int(t_ms)) % 900) / 900.0 * math.pi * 2.0)
-        right_raise = -int(arm_len * (0.58 if talk_state else 0.2) + (gesture * arm_len * 0.08))
         drawer.line(
-            (torso_right - 6, shoulder_y, torso_right + int(body_w * 0.36), shoulder_y + right_raise),
+            (torso_right - 6, shoulder_y, torso_right + right_x, shoulder_y + right_y),
             fill=shirt_rgb,
             width=max(9, int(body_w * 0.13)),
         )
@@ -727,7 +737,7 @@ class CartoonSceneRenderer:
         mouth_y = head_cy + int(head_r * 0.38)
         mouth_w = int(head_r * 0.62)
         if talk_state:
-            mouth_h = max(4, int(head_r * _viseme_open_ratio(viseme) * 1.35))
+            mouth_h = max(4, int(head_r * _viseme_open_ratio(viseme) * (1.35 if is_active else 1.15)))
             drawer.ellipse(
                 (head_cx - mouth_w // 2, mouth_y - mouth_h // 2, head_cx + mouth_w // 2, mouth_y + mouth_h // 2),
                 fill=(50, 17, 24),
@@ -990,6 +1000,41 @@ def _tint_color(rgb: tuple[int, int, int], *, tint: tuple[int, int, int], amount
         _clip_channel(rgb[1] + (tint[1] * alpha)),
         _clip_channel(rgb[2] + (tint[2] * alpha)),
     )
+
+
+def _presenter_arm_targets(
+    *,
+    pose: str,
+    arm_len: int,
+    talk_state: bool,
+    t_ms: int,
+    is_active: bool,
+) -> tuple[int, int, int, int]:
+    beat = math.sin((max(0, int(t_ms)) % 900) / 900.0 * math.pi * 2.0)
+    idle_drop = int(arm_len * (0.92 - (0.04 if is_active else 0.0)))
+    left = (-int(arm_len * 0.35), idle_drop)
+    right = (int(arm_len * 0.35), idle_drop)
+    pose_key = _clean(pose).lower()
+
+    if pose_key == "point_right":
+        right = (int(arm_len * 1.0), -int(arm_len * 0.52))
+    elif pose_key == "point_left":
+        left = (-int(arm_len * 1.0), -int(arm_len * 0.52))
+    elif pose_key == "open":
+        left = (-int(arm_len * 0.78), -int(arm_len * 0.22))
+        right = (int(arm_len * 0.78), -int(arm_len * 0.22))
+    elif pose_key in {"emphasis", "raise_both"}:
+        left = (-int(arm_len * 0.62), -int(arm_len * 0.58))
+        right = (int(arm_len * 0.62), -int(arm_len * 0.58))
+    elif pose_key == "hand_over_heart":
+        left = (-int(arm_len * 0.34), idle_drop)
+        right = (int(arm_len * 0.05), int(arm_len * 0.18))
+    elif talk_state:
+        right = (int(arm_len * 0.9), -int(arm_len * 0.42))
+
+    if talk_state:
+        right = (right[0], right[1] - int(arm_len * 0.08 * beat))
+    return left[0], left[1], right[0], right[1]
 
 
 def _clip_channel(value: float) -> int:
