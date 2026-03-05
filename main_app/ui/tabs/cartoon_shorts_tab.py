@@ -35,6 +35,7 @@ _FIDELITY_PRESETS = ["auto_profile", "hd_1080p30", "uhd_4k30"]
 _SHOWCASE_AVATAR_MODES = ["auto", "cache_sprite", "procedural_presenter"]
 _STYLE_PRESETS = ["default_scene", "expected_showcase"]
 _QA_BUNDLE_MODES = ["auto", "off"]
+_CONTROL_MODES = ["simple", "advanced"]
 
 
 def render_cartoon_shorts_tab(
@@ -51,7 +52,7 @@ def render_cartoon_shorts_tab(
     st.caption(
         "Create multi-character cartoon shorts from a simple idea or manual timeline editor, then export dual MP4 outputs."
     )
-    _apply_style_preset_if_needed()
+    _ensure_quality_ui_defaults()
 
     setup_col, control_col = st.columns([0.7, 0.3], gap="large")
     with setup_col:
@@ -80,27 +81,46 @@ def render_cartoon_shorts_tab(
 
     with control_col:
         st.markdown("#### Render Controls")
-        st.selectbox("Short Type", options=_SHORT_TYPES, index=0, key="cartoon_short_type")
-        st.slider("Scenes", min_value=2, max_value=10, value=4, step=1, key="cartoon_scene_count")
-        st.slider("Characters", min_value=2, max_value=4, value=2, step=1, key="cartoon_speaker_count")
-        st.selectbox("Output Mode", options=_OUTPUT_MODES, index=0, key="cartoon_output_mode")
-        st.selectbox("Timeline Schema Version", options=_TIMELINE_SCHEMA_OPTIONS, index=0, key="cartoon_timeline_schema_version")
-        st.selectbox("Quality Tier", options=_QUALITY_TIERS, index=0, key="cartoon_quality_tier")
-        st.selectbox(
-            "Style Preset",
-            options=_STYLE_PRESETS,
+        control_mode = st.radio(
+            "Configuration",
+            options=_CONTROL_MODES,
             index=0,
-            key="cartoon_style_preset",
-            on_change=_on_style_preset_changed,
+            key="cartoon_control_mode",
+            horizontal=True,
+            format_func=lambda mode: "Simple (Max Quality)" if mode == "simple" else "Advanced",
         )
-        st.selectbox("Render Style", options=_RENDER_STYLES, index=0, key="cartoon_render_style")
-        st.selectbox("Background Style", options=_BACKGROUND_STYLES, index=0, key="cartoon_background_style")
-        st.selectbox("Fidelity Preset", options=_FIDELITY_PRESETS, index=0, key="cartoon_fidelity_preset")
-        st.selectbox("Showcase Avatar Mode", options=_SHOWCASE_AVATAR_MODES, index=0, key="cartoon_showcase_avatar_mode")
-        st.selectbox("QA Bundle", options=_QA_BUNDLE_MODES, index=0, key="cartoon_qa_bundle_mode")
-        st.selectbox("Language", options=_LANGUAGES, index=0, key="cartoon_language")
-        st.checkbox("Use Hinglish Script", value=False, key="cartoon_hinglish_script")
-        st.checkbox("Cinematic Story Mode", value=True, key="cartoon_cinematic_story_mode")
+        if str(control_mode).strip().lower() == "simple":
+            _apply_max_quality_defaults(force=True)
+            st.caption("Using fixed max-quality preset for best output quality.")
+            st.selectbox("Short Type", options=_SHORT_TYPES, index=0, key="cartoon_short_type")
+            st.slider("Scenes", min_value=2, max_value=10, value=4, step=1, key="cartoon_scene_count")
+            st.slider("Characters", min_value=2, max_value=4, value=2, step=1, key="cartoon_speaker_count")
+            st.selectbox("Output Mode", options=_OUTPUT_MODES, index=0, key="cartoon_output_mode")
+            st.selectbox("Language", options=_LANGUAGES, index=0, key="cartoon_language")
+            st.checkbox("Use Hinglish Script", value=False, key="cartoon_hinglish_script")
+        else:
+            _apply_style_preset_if_needed()
+            st.selectbox("Short Type", options=_SHORT_TYPES, index=0, key="cartoon_short_type")
+            st.slider("Scenes", min_value=2, max_value=10, value=4, step=1, key="cartoon_scene_count")
+            st.slider("Characters", min_value=2, max_value=4, value=2, step=1, key="cartoon_speaker_count")
+            st.selectbox("Output Mode", options=_OUTPUT_MODES, index=0, key="cartoon_output_mode")
+            st.selectbox("Timeline Schema Version", options=_TIMELINE_SCHEMA_OPTIONS, index=0, key="cartoon_timeline_schema_version")
+            st.selectbox("Quality Tier", options=_QUALITY_TIERS, index=0, key="cartoon_quality_tier")
+            st.selectbox(
+                "Style Preset",
+                options=_STYLE_PRESETS,
+                index=0,
+                key="cartoon_style_preset",
+                on_change=_on_style_preset_changed,
+            )
+            st.selectbox("Render Style", options=_RENDER_STYLES, index=0, key="cartoon_render_style")
+            st.selectbox("Background Style", options=_BACKGROUND_STYLES, index=0, key="cartoon_background_style")
+            st.selectbox("Fidelity Preset", options=_FIDELITY_PRESETS, index=0, key="cartoon_fidelity_preset")
+            st.selectbox("Showcase Avatar Mode", options=_SHOWCASE_AVATAR_MODES, index=0, key="cartoon_showcase_avatar_mode")
+            st.selectbox("QA Bundle", options=_QA_BUNDLE_MODES, index=0, key="cartoon_qa_bundle_mode")
+            st.selectbox("Language", options=_LANGUAGES, index=0, key="cartoon_language")
+            st.checkbox("Use Hinglish Script", value=False, key="cartoon_hinglish_script")
+            st.checkbox("Cinematic Story Mode", value=True, key="cartoon_cinematic_story_mode")
         generate = st.button("Generate Cartoon Shorts Asset", type="primary", key="cartoon_generate_btn", width="stretch")
 
     if generate:
@@ -120,13 +140,13 @@ def render_cartoon_shorts_tab(
         scene_count = int(st.session_state.get("cartoon_scene_count", 4))
         speaker_count = int(st.session_state.get("cartoon_speaker_count", 2))
         output_mode = str(st.session_state.get("cartoon_output_mode", "dual")).strip().lower()
-        style_preset = str(st.session_state.get("cartoon_style_preset", "default_scene")).strip().lower()
+        style_preset = str(st.session_state.get("cartoon_style_preset", "expected_showcase")).strip().lower()
         qa_bundle_mode = str(st.session_state.get("cartoon_qa_bundle_mode", "auto")).strip().lower()
         timeline_schema_version = str(st.session_state.get("cartoon_timeline_schema_version", "v2")).strip().lower()
-        quality_tier = str(st.session_state.get("cartoon_quality_tier", "auto")).strip().lower()
-        render_style = str(st.session_state.get("cartoon_render_style", "scene")).strip().lower()
-        background_style = str(st.session_state.get("cartoon_background_style", "auto")).strip().lower()
-        fidelity_preset = str(st.session_state.get("cartoon_fidelity_preset", "auto_profile")).strip().lower()
+        quality_tier = str(st.session_state.get("cartoon_quality_tier", "high")).strip().lower()
+        render_style = str(st.session_state.get("cartoon_render_style", "character_showcase")).strip().lower()
+        background_style = str(st.session_state.get("cartoon_background_style", "chroma_green")).strip().lower()
+        fidelity_preset = str(st.session_state.get("cartoon_fidelity_preset", "uhd_4k30")).strip().lower()
         showcase_avatar_mode = str(st.session_state.get("cartoon_showcase_avatar_mode", "auto")).strip().lower()
         language = str(st.session_state.get("cartoon_language", "en")).strip().lower()
         hinglish_script = bool(st.session_state.get("cartoon_hinglish_script", False))
@@ -449,6 +469,37 @@ def _on_style_preset_changed() -> None:
     _apply_style_preset_if_needed(force=True)
 
 
+def _ensure_quality_ui_defaults() -> None:
+    _set_state_default("cartoon_control_mode", "simple")
+    _set_state_default("cartoon_style_preset", "expected_showcase")
+    _set_state_default("cartoon_timeline_schema_version", "v2")
+    _set_state_default("cartoon_quality_tier", "high")
+    _set_state_default("cartoon_render_style", "character_showcase")
+    _set_state_default("cartoon_background_style", "chroma_green")
+    _set_state_default("cartoon_fidelity_preset", "uhd_4k30")
+    _set_state_default("cartoon_showcase_avatar_mode", "auto")
+    _set_state_default("cartoon_qa_bundle_mode", "auto")
+    _set_state_default("cartoon_cinematic_story_mode", True)
+
+
+def _apply_max_quality_defaults(*, force: bool = False) -> None:
+    defaults: dict[str, object] = {
+        "cartoon_style_preset": "expected_showcase",
+        "cartoon_timeline_schema_version": "v2",
+        "cartoon_quality_tier": "high",
+        "cartoon_render_style": "character_showcase",
+        "cartoon_background_style": "chroma_green",
+        "cartoon_fidelity_preset": "uhd_4k30",
+        "cartoon_showcase_avatar_mode": "auto",
+        "cartoon_qa_bundle_mode": "auto",
+        "cartoon_cinematic_story_mode": True,
+    }
+    for key, value in defaults.items():
+        if force or key not in st.session_state:
+            st.session_state[key] = value
+    st.session_state["cartoon_style_preset_applied"] = "expected_showcase"
+
+
 def _apply_style_preset_if_needed(*, force: bool = False) -> None:
     preset = str(st.session_state.get("cartoon_style_preset", "default_scene")).strip().lower()
     if preset not in {"default_scene", "expected_showcase"}:
@@ -456,10 +507,15 @@ def _apply_style_preset_if_needed(*, force: bool = False) -> None:
     applied = str(st.session_state.get("cartoon_style_preset_applied", "")).strip().lower()
     if preset == "expected_showcase" and (force or applied != "expected_showcase"):
         st.session_state["cartoon_timeline_schema_version"] = "v2"
-        st.session_state["cartoon_quality_tier"] = "auto"
+        st.session_state["cartoon_quality_tier"] = "high"
         st.session_state["cartoon_render_style"] = "character_showcase"
         st.session_state["cartoon_background_style"] = "chroma_green"
-        st.session_state["cartoon_fidelity_preset"] = "hd_1080p30"
+        st.session_state["cartoon_fidelity_preset"] = "uhd_4k30"
         st.session_state["cartoon_showcase_avatar_mode"] = "auto"
         st.session_state["cartoon_qa_bundle_mode"] = "auto"
     st.session_state["cartoon_style_preset_applied"] = preset
+
+
+def _set_state_default(key: str, value: object) -> None:
+    if key not in st.session_state:
+        st.session_state[key] = value
