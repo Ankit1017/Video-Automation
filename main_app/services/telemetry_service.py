@@ -525,17 +525,30 @@ class TelemetryService:
                 accumulator.last_attributes = dict(merged)
 
     def record_event(self, event: ObservabilityEvent | dict[str, Any]) -> None:
-        if isinstance(event, ObservabilityEvent):
+        normalized: dict[str, Any]
+        if isinstance(event, dict):
+            normalized = dict(event)
+        elif isinstance(event, ObservabilityEvent) or (
+            hasattr(event, "event_name")
+            and hasattr(event, "component")
+            and hasattr(event, "status")
+            and hasattr(event, "timestamp")
+        ):
+            attributes = getattr(event, "attributes", {})
             normalized = {
-                "event_name": event.event_name,
-                "component": event.component,
-                "status": event.status,
-                "timestamp": event.timestamp,
-                "attributes": dict(event.attributes),
-                "payload_ref": event.payload_ref,
+                "event_name": str(getattr(event, "event_name", "")),
+                "component": str(getattr(event, "component", "")),
+                "status": str(getattr(event, "status", "")),
+                "timestamp": str(getattr(event, "timestamp", "")),
+                "attributes": dict(attributes) if isinstance(attributes, dict) else {},
+                "payload_ref": str(getattr(event, "payload_ref", "")),
             }
         else:
-            normalized = dict(event)
+            try:
+                normalized = dict(event)
+            except (TypeError, ValueError):
+                logger.warning("Ignoring telemetry event with unsupported shape: %s", type(event).__name__)
+                normalized = {}
         context = self.current_context()
         event_name = " ".join(str(normalized.get("event_name", "")).split()).strip() or "event"
         component = " ".join(str(normalized.get("component", "")).split()).strip() or "unknown_component"

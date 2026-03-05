@@ -67,6 +67,26 @@ class TestTelemetryService(unittest.TestCase):
             self.assertTrue(isinstance(nested, dict))
             self.assertEqual(nested.get("hello"), "world")
 
+    def test_record_event_accepts_duck_typed_event_object(self) -> None:
+        service = TelemetryService(otel_bridge=_NoopOTelBridge())
+
+        class _ForeignEvent:
+            event_name = "cartoon.render.start"
+            component = "export.cartoon"
+            status = "started"
+            timestamp = "2026-03-05T00:00:00+00:00"
+            attributes = {"source": "streamlit_reload"}
+            payload_ref = "payload_x"
+
+        service.record_event(_ForeignEvent())
+        rows = service.recent_event_rows(limit=1)
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual(row.get("event_name"), "cartoon.render.start")
+        attrs = row.get("attributes")
+        self.assertTrue(isinstance(attrs, dict))
+        self.assertEqual(attrs.get("source"), "streamlit_reload")
+
 
 if __name__ == "__main__":
     unittest.main()
