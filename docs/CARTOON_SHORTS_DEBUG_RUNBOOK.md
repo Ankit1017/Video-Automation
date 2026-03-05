@@ -91,3 +91,4 @@ Checks:
 2. Set `background_style=chroma_green` (or keep `auto` while showcase style is selected).
 3. Verify payload metadata contains both keys on export-start path.
 4. Confirm character cache variants contain multiple frames; single-frame variants will look static.
+5. If sprite pack is placeholder-quality, set `showcase_avatar_mode=procedural_presenter` (or keep `auto` and ensure motion warnings are detected).

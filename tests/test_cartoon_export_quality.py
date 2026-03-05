@@ -7,6 +7,7 @@ from main_app.services.cartoon_export_service import (
     _resolve_fidelity_preset,
     _resolve_quality_tier,
     _resolve_render_style,
+    _resolve_showcase_avatar_mode,
     _target_bitrate_kbps,
     _tier_adjusted_fps,
     CartoonExportService,
@@ -93,6 +94,29 @@ class TestCartoonExportQuality(unittest.TestCase):
         self.assertEqual(target_map["widescreen_16_9"].width, 1920)
         self.assertEqual(target_map["widescreen_16_9"].height, 1080)
         self.assertEqual(target_map["shorts_9_16"].fps, 30)
+
+    def test_showcase_avatar_mode_resolution(self) -> None:
+        self.assertEqual(
+            _resolve_showcase_avatar_mode(
+                payload={"metadata": {"showcase_avatar_mode": "cache_sprite"}},
+                render_style="character_showcase",
+            ),
+            "cache_sprite",
+        )
+        self.assertEqual(
+            _resolve_showcase_avatar_mode(
+                payload={"metadata": {"showcase_avatar_mode": "procedural_presenter"}},
+                render_style="character_showcase",
+            ),
+            "procedural_presenter",
+        )
+        self.assertEqual(
+            _resolve_showcase_avatar_mode(
+                payload={"metadata": {"showcase_avatar_mode": "auto", "pack_motion_warning_count": 6}},
+                render_style="character_showcase",
+            ),
+            "procedural_presenter",
+        )
 
 
 if __name__ == "__main__":

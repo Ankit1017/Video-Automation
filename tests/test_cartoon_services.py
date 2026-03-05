@@ -113,6 +113,7 @@ class TestCartoonServices(unittest.TestCase):
         self.assertEqual(payload.get("output_mode"), "dual")
         self.assertEqual(payload.get("render_style"), "scene")
         self.assertEqual(payload.get("background_style"), "auto")
+        self.assertEqual(payload.get("showcase_avatar_mode"), "auto")
         self.assertTrue(isinstance(payload.get("timeline", {}), dict))
         self.assertTrue(str(payload.get("script_markdown", "")).strip())
 

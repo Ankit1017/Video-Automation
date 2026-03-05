@@ -10,6 +10,7 @@ from main_app.contracts import (
     CartoonPayload,
     CartoonQualityTier,
     CartoonRenderStyle,
+    CartoonShowcaseAvatarMode,
     CartoonShortType,
     CartoonTimelineSchemaVersion,
     CartoonTimeline,
@@ -53,6 +54,7 @@ class CartoonShortsAssetService:
         render_style: str = "scene",
         background_style: str = "auto",
         fidelity_preset: str = "auto_profile",
+        showcase_avatar_mode: str = "auto",
         settings: GroqSettings,
     ) -> CartoonShortsGenerationResult:
         topic_clean = _clean(topic)
@@ -64,6 +66,7 @@ class CartoonShortsAssetService:
         render_style_clean = _normalize_render_style(render_style)
         background_style_clean = _normalize_background_style(background_style)
         fidelity_preset_clean = _normalize_fidelity_preset(fidelity_preset)
+        showcase_avatar_mode_clean = _normalize_showcase_avatar_mode(showcase_avatar_mode)
         notes: list[str] = []
 
         character_roster = self._character_pack_service.load_roster(speaker_count=speaker_count)
@@ -153,6 +156,7 @@ class CartoonShortsAssetService:
                 "render_style": render_style_clean,
                 "background_style": background_style_clean,
                 "fidelity_preset": fidelity_preset_clean,
+                "showcase_avatar_mode": showcase_avatar_mode_clean,
                 "metadata": {
                     "idea": idea_clean,
                     "scene_count_requested": max(2, min(int(scene_count), 10)),
@@ -163,6 +167,7 @@ class CartoonShortsAssetService:
                     "render_style": render_style_clean,
                     "background_style": background_style_clean,
                     "fidelity_preset": fidelity_preset_clean,
+                    "showcase_avatar_mode": showcase_avatar_mode_clean,
                     "pack_motion_warning_count": len(motion_warnings),
                 },
             },
@@ -190,6 +195,7 @@ class CartoonShortsAssetService:
             render_style=render_style_clean,
             background_style=background_style_clean,
             fidelity_preset=fidelity_preset_clean,
+            showcase_avatar_mode=showcase_avatar_mode_clean,
             result=result,
             model=settings.normalized_model,
         )
@@ -211,6 +217,7 @@ class CartoonShortsAssetService:
         render_style: CartoonRenderStyle,
         background_style: CartoonBackgroundStyle,
         fidelity_preset: CartoonFidelityPreset,
+        showcase_avatar_mode: CartoonShowcaseAvatarMode,
         result: CartoonShortsGenerationResult,
         model: str,
     ) -> None:
@@ -236,6 +243,7 @@ class CartoonShortsAssetService:
                 "render_style": render_style,
                 "background_style": background_style,
                 "fidelity_preset": fidelity_preset,
+                "showcase_avatar_mode": showcase_avatar_mode,
             },
             result_payload=payload,
             status="error" if result.parse_error else "success",
@@ -333,6 +341,13 @@ def _normalize_fidelity_preset(value: str) -> CartoonFidelityPreset:
     if raw in {"auto_profile", "hd_1080p30", "uhd_4k30"}:
         return cast(CartoonFidelityPreset, raw)
     return cast(CartoonFidelityPreset, "auto_profile")
+
+
+def _normalize_showcase_avatar_mode(value: str) -> CartoonShowcaseAvatarMode:
+    raw = _clean(value).lower()
+    if raw in {"auto", "cache_sprite", "procedural_presenter"}:
+        return cast(CartoonShowcaseAvatarMode, raw)
+    return cast(CartoonShowcaseAvatarMode, "auto")
 
 
 def _int_safe(value: object, *, default: int) -> int:

@@ -19,6 +19,7 @@ from main_app.contracts import (
     CartoonQualityTier,
     CartoonRenderProfile,
     CartoonRenderStyle,
+    CartoonShowcaseAvatarMode,
     CartoonScene,
 )
 from main_app.services.cartoon_character_asset_validator import CartoonCharacterAssetValidator
@@ -74,6 +75,7 @@ class CartoonExportService:
         render_style = _resolve_render_style(payload=cartoon_payload)
         background_style = _resolve_background_style(payload=cartoon_payload, render_style=render_style)
         fidelity_preset = _resolve_fidelity_preset(payload=cartoon_payload)
+        showcase_avatar_mode = _resolve_showcase_avatar_mode(payload=cartoon_payload, render_style=render_style)
         cinematic_mode = _bool_from_metadata(payload=cartoon_payload, key="cinematic_story_mode", default=True)
         targets = self._build_targets(
             profile=profile,
@@ -105,6 +107,7 @@ class CartoonExportService:
                             "render_style": render_style,
                             "background_style": background_style,
                             "fidelity_preset": fidelity_preset,
+                            "showcase_avatar_mode": showcase_avatar_mode,
                         },
                     )
                 )
@@ -219,6 +222,7 @@ class CartoonExportService:
                                 "background_style": background_style,
                                 "fidelity_preset": fidelity_preset,
                                 "bitrate_kbps": target.bitrate_kbps,
+                                "showcase_avatar_mode": showcase_avatar_mode,
                             },
                         )
                     )
@@ -308,6 +312,7 @@ class CartoonExportService:
                                 timeline_schema_version=timeline_schema_version,
                                 render_style=render_style,
                                 background_style=background_style,
+                                showcase_avatar_mode=showcase_avatar_mode,
                             )
                             frame.save(frame_path)
                             clip_paths.append(frame_path)
@@ -432,11 +437,13 @@ class CartoonExportService:
             cartoon_payload["render_style"] = render_style
             cartoon_payload["background_style"] = background_style
             cartoon_payload["fidelity_preset"] = fidelity_preset
+            cartoon_payload["showcase_avatar_mode"] = showcase_avatar_mode
             metadata = cartoon_payload.get("metadata", {})
             if isinstance(metadata, dict):
                 metadata["render_style"] = render_style
                 metadata["background_style"] = background_style
                 metadata["fidelity_preset"] = fidelity_preset
+                metadata["showcase_avatar_mode"] = showcase_avatar_mode
             duration_ms = max((perf_counter() - started_at) * 1000.0, 0.0)
             if self._telemetry_service is not None:
                 with self._telemetry_service.context_scope(request_id=request_id):
@@ -464,6 +471,7 @@ class CartoonExportService:
                                 "render_style": render_style,
                                 "background_style": background_style,
                                 "fidelity_preset": fidelity_preset,
+                                "showcase_avatar_mode": showcase_avatar_mode,
                             },
                         )
                     )
@@ -626,6 +634,20 @@ def _resolve_fidelity_preset(*, payload: CartoonPayload) -> CartoonFidelityPrese
     if raw in {"auto_profile", "hd_1080p30", "uhd_4k30"}:
         return cast(CartoonFidelityPreset, raw)
     return cast(CartoonFidelityPreset, "auto_profile")
+
+
+def _resolve_showcase_avatar_mode(*, payload: CartoonPayload, render_style: CartoonRenderStyle) -> CartoonShowcaseAvatarMode:
+    metadata = payload.get("metadata", {})
+    metadata_map = metadata if isinstance(metadata, dict) else {}
+    raw = _clean(payload.get("showcase_avatar_mode") or metadata_map.get("showcase_avatar_mode") or "auto").lower()
+    if raw in {"cache_sprite", "procedural_presenter"}:
+        return cast(CartoonShowcaseAvatarMode, raw)
+    if _clean(render_style) != "character_showcase":
+        return cast(CartoonShowcaseAvatarMode, "cache_sprite")
+    warning_count = _int_safe(metadata_map.get("pack_motion_warning_count"), default=0)
+    if warning_count > 0:
+        return cast(CartoonShowcaseAvatarMode, "procedural_presenter")
+    return cast(CartoonShowcaseAvatarMode, "cache_sprite")
 
 
 def _tier_adjusted_fps(base_fps: int, *, quality_tier: CartoonQualityTier) -> int:

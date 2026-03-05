@@ -19,6 +19,7 @@
    - `Render Style` (`scene | character_showcase`)
    - `Background Style` (`auto | scene | chroma_green`)
    - `Fidelity Preset` (`auto_profile | hd_1080p30 | uhd_4k30`)
+   - `Showcase Avatar Mode` (`auto | cache_sprite | procedural_presenter`)
    - `Language`
    - `Cinematic Story Mode` (recommended)
 4. Choose timeline source:
@@ -120,6 +121,7 @@ python scripts/generate_cartoon_motion_cache.py --pack-root main_app/assets/cart
 - For single-character greenscreen output, use:
   - `Render Style = character_showcase`
   - `Background Style = chroma_green` (or `auto` with showcase)
+  - `Showcase Avatar Mode = auto` (or `procedural_presenter` while sprite pack is not production-ready)
 - For high-quality exports, use:
   - `Fidelity Preset = hd_1080p30` (fast) or `uhd_4k30` (best quality, heavier render)
 - If manual JSON is rejected, validate `scenes[]` and `turns[]` first.

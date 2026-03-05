@@ -32,6 +32,7 @@ class CartoonSceneRenderer:
         timeline_schema_version: str = "v1",
         render_style: str = "scene",
         background_style: str = "scene",
+        showcase_avatar_mode: str = "cache_sprite",
     ) -> Any:
         safe_frame_count = max(1, int(frame_count))
         safe_frame_index = max(0, min(int(frame_index), safe_frame_count - 1))
@@ -100,6 +101,7 @@ class CartoonSceneRenderer:
                 camera_shift_y=camera_shift_y,
                 camera_zoom=camera_zoom,
                 render_style=style,
+                showcase_avatar_mode=showcase_avatar_mode,
             )
         else:
             if showcase_mode:
@@ -414,6 +416,7 @@ class CartoonSceneRenderer:
         camera_shift_y: float,
         camera_zoom: float,
         render_style: str,
+        showcase_avatar_mode: str,
     ) -> None:
         planned_raw = frame_plan.get("characters", [])
         planned = [item for item in planned_raw if isinstance(item, dict)] if isinstance(planned_raw, list) else []
@@ -436,6 +439,7 @@ class CartoonSceneRenderer:
             )
             return
         showcase_mode = _resolve_render_style(render_style) == "character_showcase"
+        avatar_mode = _resolve_showcase_avatar_mode(showcase_avatar_mode, showcase_mode=showcase_mode)
         if showcase_mode:
             planned = [_showcase_subject(planned)]
         roster_by_id = {
@@ -473,7 +477,10 @@ class CartoonSceneRenderer:
                 center_y = int((height * y_norm) + (camera_shift_y * 0.95))
             sprite_drawn = False
 
+            use_cache_sprite = avatar_mode == "cache_sprite" or not showcase_mode
             if (
+                use_cache_sprite
+                and
                 lottie_cache_service is not None
                 and isinstance(character, dict)
                 and _clean(character.get("asset_mode")).lower() == "lottie_cache"
@@ -536,6 +543,22 @@ class CartoonSceneRenderer:
             if sprite_drawn:
                 continue
 
+            if showcase_mode and avatar_mode == "procedural_presenter":
+                self._draw_showcase_procedural_presenter(
+                    drawer=drawer,
+                    width=width,
+                    height=height,
+                    center_x=center_x,
+                    center_y=center_y,
+                    scale=scale,
+                    character=character,
+                    state=state,
+                    viseme=viseme,
+                    emotion=emotion,
+                    t_ms=t_ms,
+                )
+                continue
+
             rgb = _hex_to_rgb(_clean(character.get("color_hex"))) or (95, 140, 210)
             rr = max(26, int(min(width, height) * (0.08 if not showcase_mode else 0.16) * scale))
             lift = int(rr * (0.12 if is_active else 0.04))
@@ -588,6 +611,138 @@ class CartoonSceneRenderer:
                 bbox = drawer.textbbox((0, 0), name, font=name_font)
                 text_w = max(0, bbox[2] - bbox[0])
                 drawer.text((center_x - text_w // 2, center_y + rr + 12 - lift), name, fill=(242, 246, 255), font=name_font)
+
+    def _draw_showcase_procedural_presenter(
+        self,
+        *,
+        drawer: Any,
+        width: int,
+        height: int,
+        center_x: int,
+        center_y: int,
+        scale: float,
+        character: CartoonCharacterSpec,
+        state: str,
+        viseme: str,
+        emotion: str,
+        t_ms: int,
+    ) -> None:
+        _ = width
+        base_rgb = _hex_to_rgb(_clean(character.get("color_hex"))) or (95, 140, 210)
+        skin_rgb = _tint_color((236, 205, 172), tint=(10, -6, -4), amount=0.12 if _clean(emotion).lower() == "tense" else 0.0)
+        shirt_rgb = _emotion_tinted(base_rgb, emotion=emotion)
+        outline = (22, 28, 34)
+
+        body_h = max(180, int(height * 0.64 * max(0.7, scale)))
+        body_w = int(body_h * 0.42)
+        foot_y = center_y
+        torso_top = foot_y - int(body_h * 0.62)
+        torso_bottom = foot_y - int(body_h * 0.16)
+        torso_left = center_x - body_w // 2
+        torso_right = center_x + body_w // 2
+
+        phase = (max(0, int(t_ms)) % 1600) / 1600.0
+        breath = math.sin(phase * math.pi * 2.0)
+        bob = int(round(3.0 * breath))
+
+        # Legs
+        leg_w = max(12, int(body_w * 0.28))
+        leg_h = max(40, int(body_h * 0.2))
+        leg_y0 = torso_bottom + bob
+        drawer.rounded_rectangle(
+            (center_x - leg_w - 4, leg_y0, center_x - 4, leg_y0 + leg_h),
+            radius=6,
+            fill=(52, 78, 112),
+            outline=outline,
+            width=2,
+        )
+        drawer.rounded_rectangle(
+            (center_x + 4, leg_y0, center_x + leg_w + 4, leg_y0 + leg_h),
+            radius=6,
+            fill=(52, 78, 112),
+            outline=outline,
+            width=2,
+        )
+
+        # Torso
+        drawer.rounded_rectangle(
+            (torso_left, torso_top + bob, torso_right, torso_bottom + bob),
+            radius=max(16, int(body_w * 0.15)),
+            fill=shirt_rgb,
+            outline=outline,
+            width=3,
+        )
+
+        # Arms (presenter gesture on talk)
+        shoulder_y = torso_top + int((torso_bottom - torso_top) * 0.2) + bob
+        arm_len = int(body_h * 0.22)
+        left_hand_y = shoulder_y + int(arm_len * 0.9)
+        drawer.line(
+            (torso_left + 6, shoulder_y, torso_left - int(body_w * 0.23), left_hand_y),
+            fill=shirt_rgb,
+            width=max(9, int(body_w * 0.13)),
+        )
+        talk_state = _clean(state).lower() == "talk"
+        gesture = math.sin((max(0, int(t_ms)) % 900) / 900.0 * math.pi * 2.0)
+        right_raise = -int(arm_len * (0.58 if talk_state else 0.2) + (gesture * arm_len * 0.08))
+        drawer.line(
+            (torso_right - 6, shoulder_y, torso_right + int(body_w * 0.36), shoulder_y + right_raise),
+            fill=shirt_rgb,
+            width=max(9, int(body_w * 0.13)),
+        )
+
+        # Head
+        head_r = max(40, int(body_h * 0.16))
+        head_cx = center_x
+        head_cy = torso_top - head_r + int(bob * 0.8)
+        drawer.ellipse(
+            (head_cx - head_r, head_cy - head_r, head_cx + head_r, head_cy + head_r),
+            fill=skin_rgb,
+            outline=outline,
+            width=3,
+        )
+        # Hair
+        hair_h = int(head_r * 0.55)
+        drawer.pieslice(
+            (head_cx - head_r, head_cy - head_r - int(head_r * 0.25), head_cx + head_r, head_cy + hair_h),
+            start=185,
+            end=355,
+            fill=(20, 24, 30),
+            outline=(20, 24, 30),
+        )
+
+        # Eyes / blink
+        eye_y = head_cy - int(head_r * 0.1)
+        eye_dx = int(head_r * 0.36)
+        eye_r = max(3, int(head_r * 0.08))
+        blinking = _clean(state).lower() == "blink"
+        if blinking:
+            drawer.line((head_cx - eye_dx - eye_r, eye_y, head_cx - eye_dx + eye_r, eye_y), fill=(24, 28, 34), width=3)
+            drawer.line((head_cx + eye_dx - eye_r, eye_y, head_cx + eye_dx + eye_r, eye_y), fill=(24, 28, 34), width=3)
+        else:
+            drawer.ellipse((head_cx - eye_dx - eye_r, eye_y - eye_r, head_cx - eye_dx + eye_r, eye_y + eye_r), fill=(24, 28, 34))
+            drawer.ellipse((head_cx + eye_dx - eye_r, eye_y - eye_r, head_cx + eye_dx + eye_r, eye_y + eye_r), fill=(24, 28, 34))
+
+        # Mouth
+        mouth_y = head_cy + int(head_r * 0.38)
+        mouth_w = int(head_r * 0.62)
+        if talk_state:
+            mouth_h = max(4, int(head_r * _viseme_open_ratio(viseme) * 1.35))
+            drawer.ellipse(
+                (head_cx - mouth_w // 2, mouth_y - mouth_h // 2, head_cx + mouth_w // 2, mouth_y + mouth_h // 2),
+                fill=(50, 17, 24),
+                outline=(25, 28, 35),
+                width=2,
+            )
+        else:
+            smile = 2 if _clean(emotion).lower() in {"warm", "inspiring"} else 0
+            drawer.arc(
+                (head_cx - mouth_w // 2, mouth_y - 6, head_cx + mouth_w // 2, mouth_y + 10 + smile),
+                start=12,
+                end=168,
+                fill=(25, 28, 35),
+                width=3,
+            )
 
     def _draw_subtitle(
         self,
@@ -747,6 +902,15 @@ def _resolve_background_style(background_style: object, *, render_style: str) ->
     return "scene"
 
 
+def _resolve_showcase_avatar_mode(mode: object, *, showcase_mode: bool) -> str:
+    raw = _clean(mode).lower()
+    if not showcase_mode:
+        return "cache_sprite"
+    if raw in {"cache_sprite", "procedural_presenter"}:
+        return raw
+    return "cache_sprite"
+
+
 def _showcase_subject(planned: list[dict[str, object]]) -> dict[str, object]:
     for item in planned:
         if bool(item.get("is_active", False)):
@@ -804,6 +968,32 @@ def _sprite_motion_offsets(
         "y_px": max(-10.0, min(y_px, 10.0)),
         "rotation_deg": max(-3.0, min(rotation_deg, 3.0)),
     }
+
+
+def _emotion_tinted(base_rgb: tuple[int, int, int], *, emotion: str) -> tuple[int, int, int]:
+    mood = _clean(emotion).lower()
+    if mood == "energetic":
+        return _tint_color(base_rgb, tint=(26, 18, 10), amount=0.22)
+    if mood == "tense":
+        return _tint_color(base_rgb, tint=(18, -12, -8), amount=0.2)
+    if mood == "warm":
+        return _tint_color(base_rgb, tint=(24, 10, -10), amount=0.2)
+    if mood == "inspiring":
+        return _tint_color(base_rgb, tint=(-8, 8, 20), amount=0.22)
+    return _tint_color(base_rgb, tint=(0, 0, 0), amount=0.0)
+
+
+def _tint_color(rgb: tuple[int, int, int], *, tint: tuple[int, int, int], amount: float) -> tuple[int, int, int]:
+    alpha = max(0.0, min(float(amount), 1.0))
+    return (
+        _clip_channel(rgb[0] + (tint[0] * alpha)),
+        _clip_channel(rgb[1] + (tint[1] * alpha)),
+        _clip_channel(rgb[2] + (tint[2] * alpha)),
+    )
+
+
+def _clip_channel(value: float) -> int:
+    return int(max(0, min(255, round(float(value)))))
 
 
 def _clean(value: object) -> str:

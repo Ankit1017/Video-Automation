@@ -90,6 +90,12 @@ CartoonFidelityPreset: TypeAlias = Literal[
     "uhd_4k30",
 ]
 
+CartoonShowcaseAvatarMode: TypeAlias = Literal[
+    "auto",
+    "cache_sprite",
+    "procedural_presenter",
+]
+
 CartoonEaseType: TypeAlias = Literal[
     "linear",
     "ease_in",
@@ -332,6 +338,7 @@ class CartoonPayload(TypedDict, total=False):
     render_style: CartoonRenderStyle
     background_style: CartoonBackgroundStyle
     fidelity_preset: CartoonFidelityPreset
+    showcase_avatar_mode: CartoonShowcaseAvatarMode
 
 
 class AssetSection(TypedDict, total=False):
@@ -617,6 +624,7 @@ class IntentPayload(TypedDict, total=False):
     render_style: str
     background_style: str
     fidelity_preset: str
+    showcase_avatar_mode: str
     idea: str
     manual_timeline_json: str
 
