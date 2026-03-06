@@ -265,6 +265,11 @@ def _verify_media_asset(*, result: AgentAssetResult, tool: AgentToolDefinition) 
             metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
             metadata_map = metadata if isinstance(metadata, dict) else {}
             timeline_schema_version = _clean_text(payload.get("timeline_schema_version") or metadata_map.get("timeline_schema_version") or "v1").lower()
+            asset_runtime_version = _clean_text(
+                payload.get("asset_runtime_version")
+                or metadata_map.get("asset_runtime_version")
+                or "v2_lottie_cache"
+            ).lower()
             if not isinstance(timeline, dict):
                 issues.append(_issue("Cartoon timeline must be an object.", f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.timeline"))
             else:
@@ -320,6 +325,16 @@ def _verify_media_asset(*, result: AgentAssetResult, tool: AgentToolDefinition) 
                             )
             checks_run.append("cartoon_roster_present")
             character_roster = payload.get("character_roster", []) if isinstance(payload, dict) else []
+            if (
+                asset_runtime_version == "v2_lottie_cache"
+                and isinstance(character_roster, list)
+                and any(
+                    isinstance(character, dict)
+                    and _clean_text(character.get("asset_mode")).lower() == "flat_assets_direct"
+                    for character in character_roster
+                )
+            ):
+                asset_runtime_version = "v3_flat_assets_direct"
             if not isinstance(character_roster, list) or len(character_roster) < 2:
                 issues.append(
                     _issue(
@@ -328,7 +343,10 @@ def _verify_media_asset(*, result: AgentAssetResult, tool: AgentToolDefinition) 
                     )
                 )
             elif timeline_schema_version == "v2":
-                checks_run.append("cartoon_v2_character_assets")
+                if asset_runtime_version == "v3_flat_assets_direct":
+                    checks_run.append("cartoon_v3_character_assets")
+                else:
+                    checks_run.append("cartoon_v2_character_assets")
                 for index, character in enumerate(character_roster):
                     if not isinstance(character, dict):
                         issues.append(
@@ -338,11 +356,18 @@ def _verify_media_asset(*, result: AgentAssetResult, tool: AgentToolDefinition) 
                             )
                         )
                         continue
-                    _validate_cartoon_v2_character_assets(
-                        character=character,
-                        issues=issues,
-                        path_prefix=f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.character_roster[{index}]",
-                    )
+                    if asset_runtime_version == "v3_flat_assets_direct":
+                        _validate_cartoon_v3_character_assets(
+                            character=character,
+                            issues=issues,
+                            path_prefix=f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.character_roster[{index}]",
+                        )
+                    else:
+                        _validate_cartoon_v2_character_assets(
+                            character=character,
+                            issues=issues,
+                            path_prefix=f"sections.{ARTIFACT_CARTOON_PAYLOAD}.data.character_roster[{index}]",
+                        )
             checks_run.append("cartoon_style_metadata_consistency")
             _validate_cartoon_style_metadata(
                 payload=payload if isinstance(payload, dict) else {},
@@ -517,6 +542,26 @@ def _validate_cartoon_v2_character_assets(
         issues.append(_issue("cartoon v2 character state_map must be a non-empty object.", f"{path_prefix}.state_map"))
 
 
+def _validate_cartoon_v3_character_assets(
+    *,
+    character: dict[str, Any],
+    issues: list[VerificationIssue],
+    path_prefix: str,
+) -> None:
+    if _clean_text(character.get("asset_mode")).lower() != "flat_assets_direct":
+        issues.append(_issue("cartoon v3 character asset_mode must be `flat_assets_direct`.", f"{path_prefix}.asset_mode"))
+    anchor = character.get("anchor", {})
+    if not isinstance(anchor, dict):
+        issues.append(_issue("cartoon v3 character anchor must be an object.", f"{path_prefix}.anchor"))
+    else:
+        x_value = anchor.get("x")
+        y_value = anchor.get("y")
+        if x_value is None or y_value is None:
+            issues.append(_issue("cartoon v3 character anchor requires `x` and `y`.", f"{path_prefix}.anchor"))
+    if _safe_int(character.get("z_layer"), default=-1) < 0:
+        issues.append(_issue("cartoon v3 character z_layer must be >= 0.", f"{path_prefix}.z_layer"))
+
+
 def _validate_cartoon_style_metadata(
     *,
     payload: dict[str, Any],
@@ -529,11 +574,31 @@ def _validate_cartoon_style_metadata(
     render_style = _clean_text(payload.get("render_style") or metadata_map.get("render_style") or "scene").lower()
     background_style = _clean_text(payload.get("background_style") or metadata_map.get("background_style") or "auto").lower()
     qa_bundle_mode = _clean_text(payload.get("qa_bundle_mode") or metadata_map.get("qa_bundle_mode") or "auto").lower()
+    asset_runtime_version = _clean_text(
+        payload.get("asset_runtime_version") or metadata_map.get("asset_runtime_version") or "v2_lottie_cache"
+    ).lower()
+    asset_pack_root = _clean_text(
+        payload.get("asset_pack_root") or metadata_map.get("asset_pack_root")
+    )
 
     if style_preset not in {"default_scene", "expected_showcase"}:
         issues.append(_issue("cartoon style_preset must be `default_scene` or `expected_showcase`.", f"{path_prefix}.style_preset"))
     if qa_bundle_mode not in {"off", "auto"}:
         issues.append(_issue("cartoon qa_bundle_mode must be `off` or `auto`.", f"{path_prefix}.qa_bundle_mode"))
+    if asset_runtime_version not in {"v2_lottie_cache", "v3_flat_assets_direct"}:
+        issues.append(
+            _issue(
+                "cartoon asset_runtime_version must be `v2_lottie_cache` or `v3_flat_assets_direct`.",
+                f"{path_prefix}.asset_runtime_version",
+            )
+        )
+    if asset_runtime_version == "v3_flat_assets_direct" and not asset_pack_root:
+        issues.append(
+            _issue(
+                "cartoon v3 runtime requires metadata.asset_pack_root.",
+                f"{path_prefix}.metadata.asset_pack_root",
+            )
+        )
 
     if style_preset == "expected_showcase":
         if render_style != "character_showcase":

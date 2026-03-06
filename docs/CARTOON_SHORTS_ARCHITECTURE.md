@@ -16,9 +16,13 @@ The `cartoon_shorts` asset is a separate media pipeline integrated with:
 - `cartoon_storyboard_service.py`: idea-to-scene LLM generation with fallback path.
 - `cartoon_timeline_service.py`: validation/normalization of scene and turn timing.
 - `cartoon_character_pack_service.py`: loads local character pack metadata.
+- `cartoon_asset_runtime_service.py`: resolves pack root and runtime mode (`v2_lottie_cache` vs `v3_flat_assets_direct`).
 - `cartoon_character_asset_validator.py`: validates strict v2 cache layout and required state coverage.
   - Also audits motion quality (low frame-count variants) for operator feedback.
   - Enforces production pack checks (`lottie_source` file existence and cache resolution consistency).
+- `cartoon_flat_asset_catalog_service.py`: indexes flat-assets templates/atoms with deterministic character selections.
+- `cartoon_flat_asset_validator.py`: validates flat-assets required directories, counts, and `cairosvg` availability.
+- `cartoon_flat_asset_sprite_service.py`: runtime SVG atom rasterization + template/atom sprite composition with cache.
 - `cartoon_lottie_cache_service.py`: resolves deterministic sprite frame paths from pre-rendered cache.
 - `cartoon_motion_planner_service.py`: frame-by-frame camera/blocking/character state planner with easing.
   - Includes deterministic secondary motion channels (torso sway/head nod/gesture intensity) and mouth-aware pose choreography.
@@ -52,6 +56,12 @@ v2 additions:
 - `qa_bundle_mode` (`off | auto`)
 - `camera_track`, `character_tracks`, `subtitle_track` on scenes
 - extended `CartoonCharacterSpec` fields for cache-based rendering
+- `CartoonCharacterSpec.asset_mode` now supports `flat_assets_direct` for v3 runtime
+- payload metadata runtime tracing:
+  - `asset_runtime_version`
+  - `asset_pack_root`
+  - `asset_pack_kind`
+  - `flat_assets_catalog_summary`
 
 ## Orchestration Integration
 
@@ -71,4 +81,5 @@ Verification:
 
 - media verification path validates timeline + roster integrity.
 - v2 verification additionally validates motion tracks and required character asset references.
+- v3 verification path validates `asset_mode=flat_assets_direct` character constraints when runtime metadata selects flat-assets mode.
 - expected-showcase verification checks style consistency (`render_style/background_style`) and QA bundle integrity when present.

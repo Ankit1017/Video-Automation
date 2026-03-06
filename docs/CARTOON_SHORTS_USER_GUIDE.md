@@ -120,6 +120,44 @@ Quick demo cache generation (for testing pipeline motion):
 python scripts/generate_cartoon_motion_cache.py --pack-root main_app/assets/cartoon_packs/default --frames 8 --overwrite
 ```
 
+## Cartoon v3 Flat-Assets Direct Runtime
+
+You can now run cartoon rendering directly from:
+
+`main_app/assets/cartoon_packs/flat_assets`
+
+without converting that folder to lottie cache layout.
+
+Activation is automatic by pack path:
+
+- if resolved pack root folder name is `flat_assets`, runtime switches to `v3_flat_assets_direct`
+- timeline schema stays `v2` (same `camera_track` + `character_tracks` contract)
+
+Pack root resolution priority:
+
+1. payload metadata `pack.pack_root` / `asset_pack_root`
+2. env var `CARTOON_PACK_ROOT`
+3. default pack path (`main_app/assets/cartoon_packs/default`)
+
+Example (Windows PowerShell):
+
+```powershell
+$env:CARTOON_PACK_ROOT="D:\projects\projects for shown\video-automation\main_app\assets\cartoon_packs\flat_assets"
+```
+
+v3 metadata keys added to payload:
+
+- `asset_runtime_version`
+- `asset_pack_root`
+- `asset_pack_kind`
+- `flat_assets_catalog_summary`
+
+Important:
+
+- `Separate Atoms` in this pack are SVG-based.
+- v3 requires `cairosvg` for runtime atom rasterization.
+- install via: `pip install cairosvg`
+
 ## Expected Output Recipe
 
 For output closest to single-presenter greenscreen references:

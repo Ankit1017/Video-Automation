@@ -25,7 +25,15 @@ from main_app.contracts import (
     CartoonScene,
     CartoonStylePreset,
 )
+from main_app.services.cartoon_asset_runtime_service import (
+    resolve_asset_runtime_version,
+    resolve_pack_kind,
+    resolve_pack_root,
+)
 from main_app.services.cartoon_character_asset_validator import CartoonCharacterAssetValidator
+from main_app.services.cartoon_flat_asset_catalog_service import CartoonFlatAssetCatalogService
+from main_app.services.cartoon_flat_asset_sprite_service import CartoonFlatAssetSpriteService
+from main_app.services.cartoon_flat_asset_validator import CartoonFlatAssetValidator
 from main_app.services.cartoon_lottie_cache_service import CartoonLottieCacheService
 from main_app.services.cartoon_motion_planner_service import CartoonMotionPlannerService
 from main_app.services.cartoon_render_profile_service import CartoonRenderProfileService
@@ -82,6 +90,9 @@ class CartoonExportService:
         style_preset = _resolve_style_preset(payload=cartoon_payload)
         qa_bundle_mode = _resolve_qa_bundle_mode(payload=cartoon_payload)
         cinematic_mode = _bool_from_metadata(payload=cartoon_payload, key="cinematic_story_mode", default=True)
+        pack_root = resolve_pack_root(payload=cast(dict[str, Any], cartoon_payload))
+        asset_runtime_version = resolve_asset_runtime_version(pack_root=pack_root)
+        asset_pack_kind = resolve_pack_kind(pack_root=pack_root, runtime_version=asset_runtime_version)
         targets = self._build_targets(
             profile=profile,
             output_mode=selected_mode,
@@ -94,6 +105,8 @@ class CartoonExportService:
         outputs: dict[str, bytes] = {}
         output_artifacts: list[CartoonOutputArtifact] = []
         lottie_cache_service: CartoonLottieCacheService | None = None
+        flat_catalog_service: CartoonFlatAssetCatalogService | None = None
+        flat_sprite_service: CartoonFlatAssetSpriteService | None = None
 
         if self._telemetry_service is not None:
             with self._telemetry_service.context_scope(request_id=request_id):
@@ -117,6 +130,9 @@ class CartoonExportService:
                             "showcase_avatar_mode": showcase_avatar_mode,
                             "style_preset": style_preset,
                             "qa_bundle_mode": qa_bundle_mode,
+                            "asset_runtime_version": asset_runtime_version,
+                            "asset_pack_kind": asset_pack_kind,
+                            "asset_pack_root": str(pack_root),
                         },
                     )
                 )
@@ -148,6 +164,16 @@ class CartoonExportService:
                         attributes={"quality_tier": quality_tier},
                     )
                 )
+                if asset_runtime_version == "v3_flat_assets_direct":
+                    self._telemetry_service.record_event(
+                        ObservabilityEvent(
+                            event_name="cartoon.runtime.v3.selected",
+                            component="export.cartoon",
+                            status="ok",
+                            timestamp=_now_iso(),
+                            attributes={"pack_root": str(pack_root), "pack_kind": asset_pack_kind},
+                        )
+                    )
 
         try:
             try:
@@ -161,6 +187,10 @@ class CartoonExportService:
             audio_path = render_root / "cartoon_audio.mp3"
             metadata = cartoon_payload.get("metadata", {})
             metadata_map = metadata if isinstance(metadata, dict) else {}
+            metadata_map["asset_runtime_version"] = asset_runtime_version
+            metadata_map["asset_pack_root"] = str(pack_root)
+            metadata_map["asset_pack_kind"] = asset_pack_kind
+            cartoon_payload["metadata"] = metadata_map
             pack_cache_fps = _pack_cache_fps_from_payload(cartoon_payload)
             timed_segments = _metadata_audio_segments(metadata_map.get("audio_segments"))
             audio_b64 = metadata_map.get("audio_b64")
@@ -171,9 +201,6 @@ class CartoonExportService:
                     pass
 
             if timeline_schema_version == "v2":
-                pack_root = _pack_root_from_payload(cartoon_payload)
-                lottie_cache_service = CartoonLottieCacheService(pack_root=pack_root)
-                pack_cache_resolution = _pack_cache_resolution_from_payload(cartoon_payload)
                 if self._telemetry_service is not None:
                     self._telemetry_service.record_event(
                         ObservabilityEvent(
@@ -181,48 +208,109 @@ class CartoonExportService:
                             component="export.cartoon",
                             status="started",
                             timestamp=_now_iso(),
-                            attributes={"pack_root": str(pack_root)},
+                            attributes={
+                                "pack_root": str(pack_root),
+                                "asset_runtime_version": asset_runtime_version,
+                            },
                         )
                     )
-                validator = CartoonCharacterAssetValidator(
-                    pack_root=pack_root,
-                    expected_cache_resolution=pack_cache_resolution,
-                )
-                validation_errors = validator.validate_roster(
-                    roster=cast(list[CartoonCharacterSpec], cartoon_payload.get("character_roster", [])),
-                    require_lottie_cache=True,
-                    timeline_schema_version=timeline_schema_version,
-                )
-                if validation_errors:
+                if asset_runtime_version == "v3_flat_assets_direct":
+                    flat_catalog_service = CartoonFlatAssetCatalogService(pack_root=pack_root)
+                    flat_validator = CartoonFlatAssetValidator(pack_root=pack_root, catalog_service=flat_catalog_service)
+                    validation_errors = flat_validator.validate_roster(
+                        roster=cast(list[CartoonCharacterSpec], cartoon_payload.get("character_roster", [])),
+                        timeline_schema_version=timeline_schema_version,
+                    )
+                    if validation_errors:
+                        if self._telemetry_service is not None:
+                            self._telemetry_service.record_metric(
+                                name="cartoon_pack_validation_failures_total",
+                                value=float(len(validation_errors)),
+                                attrs={"timeline_schema_version": timeline_schema_version},
+                            )
+                            self._telemetry_service.record_event(
+                                ObservabilityEvent(
+                                    event_name="cartoon.pack.validate.end",
+                                    component="export.cartoon",
+                                    status="error",
+                                    timestamp=_now_iso(),
+                                    attributes={"errors": len(validation_errors)},
+                                )
+                            )
+                        return {}, f"Flat-assets pack validation failed: {validation_errors[0]}"
+                    motion_warnings = flat_validator.audit_roster_motion_quality(
+                        roster=cast(list[CartoonCharacterSpec], cartoon_payload.get("character_roster", [])),
+                        timeline_schema_version=timeline_schema_version,
+                    )
+                    motion_warning_summary = flat_validator.motion_quality_summary(
+                        roster=cast(list[CartoonCharacterSpec], cartoon_payload.get("character_roster", [])),
+                        timeline_schema_version=timeline_schema_version,
+                    )
+                    metadata = cartoon_payload.get("metadata", {})
+                    metadata_map = metadata if isinstance(metadata, dict) else {}
+                    metadata_map["pack_motion_warning_count"] = len(motion_warnings)
+                    metadata_map["pack_motion_warning_summary"] = motion_warning_summary
+                    metadata_map["flat_assets_catalog_summary"] = flat_validator.catalog_summary()
+                    cartoon_payload["metadata"] = metadata_map
+                    flat_sprite_service = CartoonFlatAssetSpriteService(
+                        pack_root=pack_root,
+                        catalog_service=flat_catalog_service,
+                    )
                     if self._telemetry_service is not None:
-                        self._telemetry_service.record_metric(
-                            name="cartoon_pack_validation_failures_total",
-                            value=float(len(validation_errors)),
-                            attrs={"timeline_schema_version": timeline_schema_version},
-                        )
                         self._telemetry_service.record_event(
                             ObservabilityEvent(
-                                event_name="cartoon.pack.validate.end",
+                                event_name="cartoon.flat_assets.catalog.loaded",
                                 component="export.cartoon",
-                                status="error",
+                                status="ok",
                                 timestamp=_now_iso(),
-                                attributes={"errors": len(validation_errors)},
+                                attributes={
+                                    "pack_root": str(pack_root),
+                                    "summary": cast(Any, metadata_map.get("flat_assets_catalog_summary", {})),
+                                },
                             )
                         )
-                    return {}, f"Cartoon pack validation failed: {validation_errors[0]}"
-                motion_warnings = validator.audit_roster_motion_quality(
-                    roster=cast(list[CartoonCharacterSpec], cartoon_payload.get("character_roster", [])),
-                    timeline_schema_version=timeline_schema_version,
-                )
-                motion_warning_summary = validator.motion_quality_summary(
-                    roster=cast(list[CartoonCharacterSpec], cartoon_payload.get("character_roster", [])),
-                    timeline_schema_version=timeline_schema_version,
-                )
-                metadata = cartoon_payload.get("metadata", {})
-                metadata_map = metadata if isinstance(metadata, dict) else {}
-                metadata_map["pack_motion_warning_count"] = len(motion_warnings)
-                metadata_map["pack_motion_warning_summary"] = motion_warning_summary
-                cartoon_payload["metadata"] = metadata_map
+                else:
+                    lottie_cache_service = CartoonLottieCacheService(pack_root=pack_root)
+                    pack_cache_resolution = _pack_cache_resolution_from_payload(cartoon_payload)
+                    validator = CartoonCharacterAssetValidator(
+                        pack_root=pack_root,
+                        expected_cache_resolution=pack_cache_resolution,
+                    )
+                    validation_errors = validator.validate_roster(
+                        roster=cast(list[CartoonCharacterSpec], cartoon_payload.get("character_roster", [])),
+                        require_lottie_cache=True,
+                        timeline_schema_version=timeline_schema_version,
+                    )
+                    if validation_errors:
+                        if self._telemetry_service is not None:
+                            self._telemetry_service.record_metric(
+                                name="cartoon_pack_validation_failures_total",
+                                value=float(len(validation_errors)),
+                                attrs={"timeline_schema_version": timeline_schema_version},
+                            )
+                            self._telemetry_service.record_event(
+                                ObservabilityEvent(
+                                    event_name="cartoon.pack.validate.end",
+                                    component="export.cartoon",
+                                    status="error",
+                                    timestamp=_now_iso(),
+                                    attributes={"errors": len(validation_errors)},
+                                )
+                            )
+                        return {}, f"Cartoon pack validation failed: {validation_errors[0]}"
+                    motion_warnings = validator.audit_roster_motion_quality(
+                        roster=cast(list[CartoonCharacterSpec], cartoon_payload.get("character_roster", [])),
+                        timeline_schema_version=timeline_schema_version,
+                    )
+                    motion_warning_summary = validator.motion_quality_summary(
+                        roster=cast(list[CartoonCharacterSpec], cartoon_payload.get("character_roster", [])),
+                        timeline_schema_version=timeline_schema_version,
+                    )
+                    metadata = cartoon_payload.get("metadata", {})
+                    metadata_map = metadata if isinstance(metadata, dict) else {}
+                    metadata_map["pack_motion_warning_count"] = len(motion_warnings)
+                    metadata_map["pack_motion_warning_summary"] = motion_warning_summary
+                    cartoon_payload["metadata"] = metadata_map
                 if self._telemetry_service is not None:
                     self._telemetry_service.record_metric(
                         name="cartoon_pack_motion_warnings_total",
@@ -241,7 +329,6 @@ class CartoonExportService:
                             },
                         )
                     )
-                if self._telemetry_service is not None:
                     self._telemetry_service.record_event(
                         ObservabilityEvent(
                             event_name="cartoon.pack.validate.end",
@@ -272,6 +359,7 @@ class CartoonExportService:
                                 "bitrate_kbps": target.bitrate_kbps,
                                 "showcase_avatar_mode": showcase_avatar_mode,
                                 "style_preset": style_preset,
+                                "asset_runtime_version": asset_runtime_version,
                             },
                         )
                     )
@@ -358,6 +446,7 @@ class CartoonExportService:
                                 cinematic_mode=cinematic_mode,
                                 frame_plan=frame_plan,
                                 lottie_cache_service=lottie_cache_service,
+                                flat_asset_sprite_service=flat_sprite_service,
                                 timeline_schema_version=timeline_schema_version,
                                 render_style=render_style,
                                 background_style=background_style,
@@ -480,6 +569,28 @@ class CartoonExportService:
                     value=float(lottie_cache_service.cache_miss_count),
                     attrs={"timeline_schema_version": timeline_schema_version},
                 )
+            flat_diagnostics = flat_sprite_service.diagnostics() if flat_sprite_service is not None else {}
+            if self._telemetry_service is not None and flat_sprite_service is not None:
+                self._telemetry_service.record_metric(
+                    name="cartoon.flat_assets.svg_rasterize.cache_hits",
+                    value=float(flat_diagnostics.get("svg_raster_cache_hits", 0)),
+                    attrs={"timeline_schema_version": timeline_schema_version},
+                )
+                self._telemetry_service.record_metric(
+                    name="cartoon.flat_assets.svg_rasterize.cache_misses",
+                    value=float(flat_diagnostics.get("svg_raster_cache_misses", 0)),
+                    attrs={"timeline_schema_version": timeline_schema_version},
+                )
+                self._telemetry_service.record_metric(
+                    name="cartoon.flat_assets.compose.total",
+                    value=float(flat_diagnostics.get("compose_total", 0)),
+                    attrs={"timeline_schema_version": timeline_schema_version},
+                )
+                self._telemetry_service.record_metric(
+                    name="cartoon.flat_assets.compose.failures",
+                    value=float(flat_diagnostics.get("compose_failures", 0)),
+                    attrs={"timeline_schema_version": timeline_schema_version},
+                )
 
             qa_bundle: dict[str, object] | None = None
             if qa_bundle_mode == "auto":
@@ -497,6 +608,15 @@ class CartoonExportService:
                     cinematic_mode=cinematic_mode,
                     targets=targets,
                     cache_miss_count=(lottie_cache_service.cache_miss_count if lottie_cache_service is not None else 0),
+                    asset_runtime_version=asset_runtime_version,
+                    asset_pack_root=pack_root,
+                    asset_pack_kind=asset_pack_kind,
+                    flat_catalog_summary=(
+                        flat_catalog_service.summary()
+                        if flat_catalog_service is not None
+                        else cast(dict[str, object], metadata_map.get("flat_assets_catalog_summary", {}))
+                    ),
+                    flat_sprite_diagnostics=flat_diagnostics,
                 )
                 qa_bundle_bytes = json.dumps(qa_bundle, ensure_ascii=True, sort_keys=True, indent=2).encode("utf-8")
                 output_artifacts.append(
@@ -553,6 +673,9 @@ class CartoonExportService:
                 metadata["showcase_avatar_mode"] = showcase_avatar_mode
                 metadata["style_preset"] = style_preset
                 metadata["qa_bundle_mode"] = qa_bundle_mode
+                metadata["asset_runtime_version"] = asset_runtime_version
+                metadata["asset_pack_root"] = str(pack_root)
+                metadata["asset_pack_kind"] = asset_pack_kind
             duration_ms = max((perf_counter() - started_at) * 1000.0, 0.0)
             if self._telemetry_service is not None:
                 with self._telemetry_service.context_scope(request_id=request_id):
@@ -583,6 +706,7 @@ class CartoonExportService:
                                 "showcase_avatar_mode": showcase_avatar_mode,
                                 "style_preset": style_preset,
                                 "qa_bundle_mode": qa_bundle_mode,
+                                "asset_runtime_version": asset_runtime_version,
                             },
                         )
                     )
@@ -818,14 +942,7 @@ def _target_bitrate_kbps(
 
 
 def _pack_root_from_payload(payload: CartoonPayload) -> Path:
-    metadata = payload.get("metadata", {})
-    metadata_map = metadata if isinstance(metadata, dict) else {}
-    pack = metadata_map.get("pack")
-    if isinstance(pack, dict):
-        pack_root = _clean(pack.get("pack_root"))
-        if pack_root:
-            return Path(pack_root)
-    return Path(__file__).resolve().parents[1] / "assets" / "cartoon_packs" / "default"
+    return resolve_pack_root(payload=cast(dict[str, Any], payload))
 
 
 def _pack_cache_fps_from_payload(payload: CartoonPayload) -> int:
@@ -871,6 +988,11 @@ def _build_qa_bundle(
     cinematic_mode: bool,
     targets: list[_RenderTarget],
     cache_miss_count: int,
+    asset_runtime_version: str,
+    asset_pack_root: Path,
+    asset_pack_kind: str,
+    flat_catalog_summary: dict[str, object],
+    flat_sprite_diagnostics: dict[str, int],
 ) -> dict[str, object]:
     scenes = _timeline_scenes(payload)
     metadata = payload.get("metadata", {})
@@ -920,6 +1042,11 @@ def _build_qa_bundle(
         "scene_count": len(scene_summaries),
         "scenes": scene_summaries,
         "cache_miss_count": max(0, int(cache_miss_count)),
+        "asset_runtime_version": asset_runtime_version,
+        "asset_pack_root": str(asset_pack_root),
+        "asset_pack_kind": asset_pack_kind,
+        "flat_assets_catalog_summary": flat_catalog_summary,
+        "flat_sprite_diagnostics": flat_sprite_diagnostics,
         "pack_motion_warning_count": max(0, _int_safe(metadata_map.get("pack_motion_warning_count"), default=0)),
         "pack_motion_warning_summary": metadata_map.get("pack_motion_warning_summary", {}),
     }

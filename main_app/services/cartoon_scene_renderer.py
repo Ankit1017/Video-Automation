@@ -29,6 +29,7 @@ class CartoonSceneRenderer:
         cinematic_mode: bool = True,
         frame_plan: dict[str, object] | None = None,
         lottie_cache_service: Any | None = None,
+        flat_asset_sprite_service: Any | None = None,
         timeline_schema_version: str = "v1",
         render_style: str = "scene",
         background_style: str = "scene",
@@ -97,6 +98,7 @@ class CartoonSceneRenderer:
                 character_roster=character_roster,
                 frame_plan=cast(dict[str, object], frame_plan),
                 lottie_cache_service=lottie_cache_service,
+                flat_asset_sprite_service=flat_asset_sprite_service,
                 camera_shift_x=camera_shift_x,
                 camera_shift_y=camera_shift_y,
                 camera_zoom=camera_zoom,
@@ -412,6 +414,7 @@ class CartoonSceneRenderer:
         character_roster: list[CartoonCharacterSpec],
         frame_plan: dict[str, object],
         lottie_cache_service: Any | None,
+        flat_asset_sprite_service: Any | None,
         camera_shift_x: float,
         camera_shift_y: float,
         camera_zoom: float,
@@ -483,6 +486,64 @@ class CartoonSceneRenderer:
             use_cache_sprite = avatar_mode == "cache_sprite" or not showcase_mode
             if (
                 use_cache_sprite
+                and flat_asset_sprite_service is not None
+                and isinstance(character, dict)
+                and _clean(character.get("asset_mode")).lower() == "flat_assets_direct"
+            ):
+                try:
+                    target_h = max(48, int(height * (0.62 if showcase_mode else 0.3) * scale))
+                    target_w = max(36, int(target_h * (0.44 if showcase_mode else 0.36)))
+                    sprite = flat_asset_sprite_service.render_sprite(
+                        character=character,
+                        state=("talk" if state == "talk" else "blink" if state == "blink" else "idle"),
+                        emotion=emotion,
+                        viseme=viseme,
+                        pose=pose,
+                        t_ms=t_ms,
+                        target_size=(target_w, target_h),
+                    )
+                    if sprite is not None:
+                        motion = _sprite_motion_offsets(
+                            t_ms=t_ms,
+                            char_id=char_id,
+                            state=state,
+                            is_active=is_active,
+                            showcase_mode=showcase_mode,
+                            secondary_motion=secondary_motion,
+                        )
+                        target_w = max(24, int(round(target_w * motion["scale_x"])))
+                        target_h = max(24, int(round(target_h * motion["scale_y"])))
+                        sprite = sprite.resize((target_w, target_h))
+                        rotate_deg = motion["rotation_deg"]
+                        if abs(rotate_deg) >= 0.05:
+                            sprite = sprite.rotate(
+                                rotate_deg,
+                                resample=getattr(image_module, "BICUBIC", 3),
+                                expand=True,
+                            )
+                        sprite_w, sprite_h = sprite.size
+                        left = int(center_x - (sprite_w * anchor_x) + motion["x_px"])
+                        top = int(center_y - (sprite_h * anchor_y) + motion["y_px"])
+                        image.paste(sprite, (left, top), sprite)
+                        sprite_drawn = True
+                        if is_active and not showcase_mode:
+                            drawer.rounded_rectangle(
+                                (left - 6, top - 6, left + sprite_w + 6, top + sprite_h + 6),
+                                radius=12,
+                                outline=(236, 244, 255),
+                                width=3,
+                            )
+                        if not showcase_mode:
+                            bbox = drawer.textbbox((0, 0), name, font=name_font)
+                            text_w = max(0, bbox[2] - bbox[0])
+                            drawer.text((center_x - text_w // 2, top + sprite_h + 8), name, fill=(242, 246, 255), font=name_font)
+                except (AttributeError, OSError, RuntimeError, TypeError, ValueError):
+                    sprite_drawn = False
+
+            if (
+                use_cache_sprite
+                and
+                not sprite_drawn
                 and
                 lottie_cache_service is not None
                 and isinstance(character, dict)

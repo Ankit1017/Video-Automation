@@ -114,3 +114,20 @@ Checks:
 2. Confirm export completed at least one target output.
 3. Verify payload metadata contains `qa_bundle` and output artifacts include `key=qa_bundle`.
 4. Inspect `qa_bundle.pack_motion_warning_count` and `qa_bundle.cache_miss_count` for motion quality diagnostics.
+
+## 10) Flat-assets v3 runtime selected but render quality/fallback is wrong
+
+Checks:
+
+1. Confirm metadata has `asset_runtime_version=v3_flat_assets_direct`.
+2. Confirm `asset_pack_root` points to the intended `.../cartoon_packs/flat_assets` path.
+3. Verify required directories exist:
+   - `Templates/Bust`, `Templates/Standing`, `Templates/Sitting`
+   - `Separate Atoms/face`, `head`, `body`, `pose/standing`, `pose/sitting`
+4. Verify `cairosvg` is installed (`pip show cairosvg`).
+5. Inspect telemetry:
+   - `cartoon.runtime.v3.selected`
+   - `cartoon.flat_assets.catalog.loaded`
+   - `cartoon.flat_assets.svg_rasterize.cache_hits/misses`
+   - `cartoon.flat_assets.compose.total/failures`
+6. If compose failures are high, renderer falls back to procedural presenter or circle fallback.

@@ -19,8 +19,13 @@ from main_app.contracts import (
 )
 from main_app.models import CartoonShortsGenerationResult, GroqSettings
 from main_app.services.asset_history_service import AssetHistoryService
+from main_app.services.cartoon_asset_runtime_service import (
+    resolve_asset_runtime_version,
+    resolve_pack_kind,
+)
 from main_app.services.cartoon_character_asset_validator import CartoonCharacterAssetValidator
 from main_app.services.cartoon_character_pack_service import CartoonCharacterPackService
+from main_app.services.cartoon_flat_asset_validator import CartoonFlatAssetValidator
 from main_app.services.cartoon_storyboard_service import CartoonStoryboardService, SHORT_TYPE_OPTIONS
 from main_app.services.cartoon_timeline_service import CartoonTimelineService
 
@@ -76,6 +81,9 @@ class CartoonShortsAssetService:
         notes: list[str] = []
 
         character_roster = self._character_pack_service.load_roster(speaker_count=speaker_count)
+        pack_root = self._character_pack_service.pack_root_path()
+        asset_runtime_version = resolve_asset_runtime_version(pack_root=pack_root)
+        asset_pack_kind = resolve_pack_kind(pack_root=pack_root, runtime_version=asset_runtime_version)
         pack_metadata = self._character_pack_service.pack_metadata()
         cache_hits = 0
         total_calls = 0
@@ -121,33 +129,62 @@ class CartoonShortsAssetService:
             parse_error = parse_error or "Cartoon timeline has no scenes."
 
         if timeline_schema_version_clean == "v2":
-            validator = CartoonCharacterAssetValidator(
-                pack_root=self._character_pack_service.pack_root_path(),
-                expected_cache_resolution=_clean(pack_metadata.get("cache_resolution")),
-            )
-            asset_errors = validator.validate_roster(
-                roster=character_roster,
-                require_lottie_cache=True,
-                timeline_schema_version=timeline_schema_version_clean,
-            )
-            if asset_errors:
-                parse_error = parse_error or f"Character asset validation failed ({len(asset_errors)} issues)."
-                notes.extend(asset_errors[:60])
-            motion_warnings = validator.audit_roster_motion_quality(
-                roster=character_roster,
-                timeline_schema_version=timeline_schema_version_clean,
-            )
-            motion_warning_summary = validator.motion_quality_summary(
-                roster=character_roster,
-                timeline_schema_version=timeline_schema_version_clean,
-            )
+            if asset_runtime_version == "v3_flat_assets_direct":
+                validator = CartoonFlatAssetValidator(pack_root=pack_root)
+                asset_errors = validator.validate_roster(
+                    roster=character_roster,
+                    timeline_schema_version=timeline_schema_version_clean,
+                )
+                if asset_errors:
+                    parse_error = parse_error or f"Flat-assets validation failed ({len(asset_errors)} issues)."
+                    notes.extend(asset_errors[:60])
+                motion_warnings = validator.audit_roster_motion_quality(
+                    roster=character_roster,
+                    timeline_schema_version=timeline_schema_version_clean,
+                )
+                motion_warning_summary = validator.motion_quality_summary(
+                    roster=character_roster,
+                    timeline_schema_version=timeline_schema_version_clean,
+                )
+                flat_catalog_summary = validator.catalog_summary()
+            else:
+                validator = CartoonCharacterAssetValidator(
+                    pack_root=pack_root,
+                    expected_cache_resolution=_clean(pack_metadata.get("cache_resolution")),
+                )
+                asset_errors = validator.validate_roster(
+                    roster=character_roster,
+                    require_lottie_cache=True,
+                    timeline_schema_version=timeline_schema_version_clean,
+                )
+                if asset_errors:
+                    parse_error = parse_error or f"Character asset validation failed ({len(asset_errors)} issues)."
+                    notes.extend(asset_errors[:60])
+                motion_warnings = validator.audit_roster_motion_quality(
+                    roster=character_roster,
+                    timeline_schema_version=timeline_schema_version_clean,
+                )
+                motion_warning_summary = validator.motion_quality_summary(
+                    roster=character_roster,
+                    timeline_schema_version=timeline_schema_version_clean,
+                )
+                flat_catalog_summary = {}
             notes.extend(motion_warnings[:20])
             if len(motion_warnings) > 20:
                 notes.append(f"Motion quality warnings truncated: {len(motion_warnings) - 20} additional warning(s).")
             notes.append("Timeline schema version: v2")
         else:
             motion_warning_summary = {}
+            flat_catalog_summary = {}
             notes.append("Timeline schema version: v1")
+        notes.append(
+            (
+                "Resolved asset runtime: "
+                f"asset_runtime_version={asset_runtime_version}, "
+                f"asset_pack_kind={asset_pack_kind}, "
+                f"asset_pack_root={pack_root}"
+            )
+        )
         notes.append(
             (
                 "Resolved render config: "
@@ -204,6 +241,10 @@ class CartoonShortsAssetService:
                     "qa_bundle_mode": qa_bundle_mode_clean,
                     "pack_motion_warning_count": len(motion_warnings),
                     "pack_motion_warning_summary": motion_warning_summary,
+                    "asset_runtime_version": asset_runtime_version,
+                    "asset_pack_root": str(pack_root),
+                    "asset_pack_kind": asset_pack_kind,
+                    "flat_assets_catalog_summary": flat_catalog_summary,
                 },
             },
         )
